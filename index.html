@@ -410,6 +410,107 @@
       background: #0b5f59;
     }
 
+    /* PANEL SEARCH JALAN DAN LOKASI */
+    #searchLocationPanel {
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1002;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+      padding: 8px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      min-width: 460px;
+      max-width: 640px;
+    }
+
+    #searchLocationPanel input {
+      flex: 1;
+      padding: 8px 10px;
+      border: 1px solid #bbb;
+      border-radius: 5px;
+      font-size: 13px;
+    }
+
+    #searchLocationPanel button {
+      padding: 8px 10px;
+      border: none;
+      border-radius: 5px;
+      background: #0f766e;
+      color: white;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    #searchLocationPanel button:hover {
+      background: #0b5f59;
+    }
+
+    #searchResultList {
+      position: absolute;
+      top: 54px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1002;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+      min-width: 460px;
+      max-width: 640px;
+      max-height: 260px;
+      overflow-y: auto;
+      display: none;
+      font-size: 12px;
+    }
+
+    .search-result-item {
+      padding: 9px 11px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+      line-height: 1.4;
+    }
+
+    .search-result-item:hover {
+      background: #f1f5f9;
+    }
+
+    .search-result-title {
+      font-weight: bold;
+      color: #0f766e;
+    }
+
+    .lokasi-saya-marker {
+      width: 16px;
+      height: 16px;
+      background: #2563eb;
+      border: 3px solid white;
+      border-radius: 50%;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25), 0 2px 6px rgba(0, 0, 0, 0.35);
+    }
+
+    @media (max-width: 900px) {
+      #searchLocationPanel,
+      #searchResultList {
+        left: 52%;
+        min-width: 300px;
+        max-width: 340px;
+      }
+
+      #searchLocationPanel {
+        flex-wrap: wrap;
+      }
+
+      #searchLocationPanel input {
+        flex-basis: 100%;
+      }
+    }
+
     /* TITIK VERTEX DRAWING DIBUAT BULAT SEPERTI GOOGLE EARTH */
     .leaflet-div-icon.leaflet-editing-icon,
     .leaflet-draw-guide-dash {
@@ -651,6 +752,14 @@
         </div>
       </div>
     </div>
+
+    <div id="searchLocationPanel">
+      <input type="text" id="inputCariJalan" placeholder="Cari jalan/lokasi, contoh: Jalan Bojong Indah, Jakarta Timur">
+      <button type="button" id="btnCariJalan">Cari</button>
+      <button type="button" id="btnLokasiSaya">Lokasi Saya</button>
+    </div>
+
+    <div id="searchResultList"></div>
 
     <div id="measurementPanel"></div>
   </div>
@@ -2234,6 +2343,168 @@
       setTimeout(function () {
         map.invalidateSize();
       }, 300);
+    });
+
+    /* FITUR SEARCH JALAN DAN LOKASI SAAT INI */
+    let markerCariJalan = null;
+    let markerLokasiSaya = null;
+    let circleAkurasiLokasi = null;
+
+    const ikonLokasiSaya = L.divIcon({
+      className: "",
+      html: '<div class="lokasi-saya-marker"></div>',
+      iconSize: [22, 22],
+      iconAnchor: [11, 11]
+    });
+
+    function tampilkanHasilCariJalan(data) {
+      const list = document.getElementById("searchResultList");
+
+      if (!data || data.length === 0) {
+        list.style.display = "block";
+        list.innerHTML = `
+          <div class="search-result-item">
+            Tidak ada hasil ditemukan. Coba pakai kata kunci lain.
+          </div>
+        `;
+        return;
+      }
+
+      let html = "";
+
+      data.slice(0, 6).forEach((item, index) => {
+        const nama = item.display_name || "Lokasi tanpa nama";
+        html += `
+          <div class="search-result-item" onclick="pilihHasilCariJalan(${index})">
+            <div class="search-result-title">Hasil ${index + 1}</div>
+            ${nama}
+          </div>
+        `;
+      });
+
+      list.dataset.hasil = JSON.stringify(data.slice(0, 6));
+      list.style.display = "block";
+      list.innerHTML = html;
+    }
+
+    function cariJalan() {
+      const input = document.getElementById("inputCariJalan");
+      const kataKunci = input.value.trim();
+      const list = document.getElementById("searchResultList");
+
+      if (kataKunci === "") {
+        alert("Masukkan nama jalan atau lokasi yang ingin dicari.");
+        return;
+      }
+
+      list.style.display = "block";
+      list.innerHTML = `
+        <div class="search-result-item">
+          Mencari lokasi...
+        </div>
+      `;
+
+      const query = encodeURIComponent(kataKunci + ", Jakarta, Indonesia");
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=6&addressdetails=1&q=${query}`;
+
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          tampilkanHasilCariJalan(data);
+        })
+        .catch(error => {
+          console.error(error);
+          list.style.display = "block";
+          list.innerHTML = `
+            <div class="search-result-item">
+              Pencarian gagal. Coba beberapa saat lagi.
+            </div>
+          `;
+        });
+    }
+
+    function pilihHasilCariJalan(index) {
+      const list = document.getElementById("searchResultList");
+      const data = JSON.parse(list.dataset.hasil || "[]");
+      const item = data[index];
+
+      if (!item) return;
+
+      const lat = parseFloat(item.lat);
+      const lon = parseFloat(item.lon);
+
+      if (isNaN(lat) || isNaN(lon)) return;
+
+      if (markerCariJalan) {
+        map.removeLayer(markerCariJalan);
+      }
+
+      markerCariJalan = L.marker([lat, lon]).addTo(map);
+      markerCariJalan.bindPopup(`
+        <b>Hasil Pencarian</b><br>
+        ${item.display_name}
+      `).openPopup();
+
+      map.setView([lat, lon], 18);
+      list.style.display = "none";
+    }
+
+    function tampilkanLokasiSaya() {
+      if (!navigator.geolocation) {
+        alert("Browser kamu belum mendukung fitur lokasi.");
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        function (posisi) {
+          const lat = posisi.coords.latitude;
+          const lon = posisi.coords.longitude;
+          const akurasi = posisi.coords.accuracy;
+
+          if (markerLokasiSaya) {
+            map.removeLayer(markerLokasiSaya);
+          }
+
+          if (circleAkurasiLokasi) {
+            map.removeLayer(circleAkurasiLokasi);
+          }
+
+          markerLokasiSaya = L.marker([lat, lon], {
+            icon: ikonLokasiSaya
+          }).addTo(map);
+
+          circleAkurasiLokasi = L.circle([lat, lon], {
+            radius: akurasi,
+            color: "#2563eb",
+            weight: 1,
+            fillColor: "#2563eb",
+            fillOpacity: 0.12
+          }).addTo(map);
+
+          markerLokasiSaya.bindPopup(`
+            <b>Lokasi Saya</b><br>
+            Akurasi sekitar ${akurasi.toFixed(0)} meter
+          `).openPopup();
+
+          map.setView([lat, lon], 18);
+        },
+        function () {
+          alert("Lokasi tidak bisa diakses. Pastikan izin lokasi di browser sudah diaktifkan.");
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    }
+
+    document.getElementById("btnCariJalan").addEventListener("click", cariJalan);
+    document.getElementById("btnLokasiSaya").addEventListener("click", tampilkanLokasiSaya);
+    document.getElementById("inputCariJalan").addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        cariJalan();
+      }
     });
 
     /* FITUR GAMBAR DAN UKUR PETA */
