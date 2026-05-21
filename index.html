@@ -2121,9 +2121,11 @@
       const metodeTc = document.getElementById("pilihMetodeTc").value;
       const qFields = document.getElementById("qRasionalFields");
       const fieldFaa = document.getElementById("fieldFaa");
+      const btnHitungQ = document.getElementById("btnHitungHidrolika");
 
       if (jenisPerhitungan === "q_rasional") {
         qFields.style.display = "block";
+        btnHitungQ.style.display = "block";
         fieldFaa.style.display = "none";
 
         if (intensitasTerakhir !== null && document.getElementById("intensitasQ").value === "") {
@@ -2131,6 +2133,7 @@
         }
       } else {
         qFields.style.display = "none";
+        btnHitungQ.style.display = "none";
 
         if (metodeTc === "faa") {
           fieldFaa.style.display = "block";
