@@ -651,9 +651,7 @@
           <label>
             Pilih Perhitungan
             <select id="pilihPerhitunganHidrolika">
-              <option value="tc_intensitas">Tc Kirpich + Intensitas Hujan</option>
-              <option value="tc">Tc Kirpich</option>
-              <option value="intensitas">Intensitas Hujan</option>
+              <option value="intensitas">Perhitungan Intensitas Hujan</option>
               <option value="q_rasional">Q Rancangan Metode Rasional</option>
             </select>
           </label>
@@ -752,7 +750,7 @@
           </div>
 
           <button id="btnHitungIntensitas" type="button">Hitung Intensitas Hujan / I</button>
-          <button id="btnHitungHidrolika">Hitung Hidrolika / Q Rencana</button>
+          <button id="btnHitungHidrolika">Hitung Q Rencana</button>
 
           <div class="rumus-box">
             <b>Rumus yang digunakan:</b><br>
@@ -2222,7 +2220,7 @@
 
       let html = `
         <div class="hasil-hidrolika">
-          <b>Hasil Tahap 1: Intensitas Hujan</b>
+          <b>Hasil Perhitungan Intensitas Hujan</b>
 
           <table>
             <tr>
@@ -2276,8 +2274,8 @@
           </table>
 
           <div class="statistik-kecil">
-            Nilai I sudah otomatis masuk ke kolom Intensitas Hujan / I pada menu Q Rancangan.<br>
-            Lanjutkan dengan memilih tata guna lahan, mengisi nilai C, menambahkan luas A, lalu klik Hitung Q Rencana.
+            Hasil perhitungan ini sudah menampilkan nilai tc dan intensitas hujan / I.<br>
+            Nilai I otomatis masuk ke kolom Intensitas Hujan / I pada menu Q Rancangan.
           </div>
         </div>
       `;
@@ -2443,7 +2441,7 @@
 
       let intensitas = null;
 
-      if (jenisPerhitungan === "tc_intensitas" || jenisPerhitungan === "intensitas") {
+      if (jenisPerhitungan === "intensitas") {
         if (isNaN(r24) || r24 <= 0) {
           hasilDiv.innerHTML = `
             <div class="hasil-hidrolika">
@@ -2459,7 +2457,7 @@
 
       let html = `
         <div class="hasil-hidrolika">
-          <b>Hasil Perhitungan Hidrolika</b>
+          <b>Hasil Perhitungan Intensitas Hujan</b>
 
           <table>
             <tr>
@@ -2501,7 +2499,7 @@
         `;
       }
 
-      if (jenisPerhitungan === "tc_intensitas" || jenisPerhitungan === "tc") {
+      if (jenisPerhitungan === "intensitas") {
         html += `
             <tr>
               <td>tc ${metodeTc === "kirpich" ? "Kirpich" : "FAA"}</td>
@@ -2514,7 +2512,7 @@
         `;
       }
 
-      if (jenisPerhitungan === "tc_intensitas" || jenisPerhitungan === "intensitas") {
+      if (jenisPerhitungan === "intensitas") {
         html += `
             <tr>
               <td>R24</td>
