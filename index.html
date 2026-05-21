@@ -368,6 +368,10 @@
       color: #333;
     }
 
+    .hasil-hidrolika td:last-child {
+      text-align: right;
+    }
+
     @media (max-width: 900px) {
       #layerPanel {
         width: 45%;
@@ -498,22 +502,22 @@
 
           <label>
             Elevasi Hulu (m)
-            <input type="number" id="elevasiHulu" placeholder="Contoh: 25" step="0.001">
+            <input type="number" id="elevasiHulu" placeholder="Contoh: 33.45" step="0.001">
           </label>
 
           <label>
             Elevasi Hilir (m)
-            <input type="number" id="elevasiHilir" placeholder="Contoh: 15" step="0.001">
+            <input type="number" id="elevasiHilir" placeholder="Contoh: 31.79" step="0.001">
           </label>
 
           <label>
             Panjang Saluran / L (m)
-            <input type="number" id="panjangSaluran" placeholder="Contoh: 1500" step="0.001">
+            <input type="number" id="panjangSaluran" placeholder="Contoh: 281.66" step="0.001">
           </label>
 
           <label>
             Hujan Harian Maksimum / R24 (mm)
-            <input type="number" id="r24Hujan" placeholder="Contoh: 120" step="0.001">
+            <input type="number" id="r24Hujan" placeholder="Contoh: 205.93" step="0.001">
           </label>
 
           <button id="btnHitungHidrolika">Hitung Hidrolika</button>
@@ -523,6 +527,7 @@
             S = (Elevasi Hulu − Elevasi Hilir) / L<br>
             tc = 0,0195 × L<sup>0,77</sup> × S<sup>-0,385</sup><br>
             I = R24 / 24 × (24 / t)<sup>2/3</sup><br><br>
+
             <b>Keterangan:</b><br>
             L = panjang saluran dalam meter<br>
             S = kemiringan saluran m/m<br>
@@ -1822,7 +1827,7 @@
             </tr>
             <tr>
               <td>Panjang Saluran / L</td>
-              <td>${formatAngka(panjangSaluran, 3)} m</td>
+              <td>${formatAngka(panjangSaluran, 2)} m</td>
             </tr>
             <tr>
               <td>Slope / S</td>
@@ -1838,7 +1843,7 @@
             </tr>
             <tr>
               <td>tc</td>
-              <td>${formatAngka(tcJam, 4)} jam</td>
+              <td>${formatAngka(tcJam, 3)} jam</td>
             </tr>
         `;
       }
@@ -1847,11 +1852,11 @@
         html += `
             <tr>
               <td>R24</td>
-              <td>${formatAngka(r24, 3)} mm</td>
+              <td>${formatAngka(r24, 2)} mm</td>
             </tr>
             <tr>
               <td>Intensitas Hujan / I</td>
-              <td><b>${formatAngka(intensitas, 3)} mm/jam</b></td>
+              <td><b>${formatAngka(intensitas, 2)} mm/jam</b></td>
             </tr>
         `;
       }
@@ -1864,7 +1869,7 @@
             - Slope dihitung dari (Elevasi Hulu − Elevasi Hilir) / Panjang Saluran.<br>
             - tc Kirpich menggunakan satuan menit.<br>
             - Untuk rumus intensitas, nilai t menggunakan tc dalam satuan jam.<br>
-            - Intensitas hujan menggunakan rumus I = R24 / 24 × (24 / t)<sup>2/3</sup>.
+            - Angka yang ditampilkan dibulatkan, tetapi perhitungan memakai nilai penuh.
           </div>
         </div>
       `;
