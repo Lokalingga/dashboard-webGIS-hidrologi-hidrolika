@@ -659,6 +659,25 @@
           </label>
 
           <label>
+            Metode Waktu Konsentrasi (tc)
+            <select id="pilihMetodeTc">
+              <option value="kirpich">Kirpich</option>
+              <option value="faa">FAA</option>
+            </select>
+          </label>
+
+          <div id="fieldFaa" style="display: none;">
+            <label>
+              Koefisien Limpasan / C untuk FAA
+              <input type="number" id="nilaiCFaa" placeholder="Contoh: 0.70" step="0.001" min="0" max="1">
+            </label>
+
+            <div class="statistik-kecil" style="margin-bottom: 10px;">
+              Rumus FAA memakai C antara 0.30 - 0.90 sesuai kondisi permukaan. L pada rumus dikonversi otomatis dari meter ke feet.
+            </div>
+          </div>
+
+          <label>
             Elevasi Hulu (m)
             <input type="number" id="elevasiHulu" placeholder="Contoh: 33.45" step="0.001">
           </label>
@@ -737,12 +756,15 @@
           <div class="rumus-box">
             <b>Rumus yang digunakan:</b><br>
             S = (Elevasi Hulu − Elevasi Hilir) / L<br>
-            tc = 0,0195 × L<sup>0,77</sup> × S<sup>-0,385</sup><br>
+            tc Kirpich = 0,0195 × L<sup>0,77</sup> × S<sup>-0,385</sup><br>
+            tc FAA = 1,8 × (1,1 − C) × L<sup>0,5</sup> / S<sup>0,33</sup><br>
             I = R24 / 24 × (24 / t)<sup>2/3</sup><br><br>
 
             <b>Keterangan:</b><br>
-            L = panjang saluran dalam meter<br>
-            S = kemiringan saluran m/m<br>
+            L Kirpich = panjang saluran dalam meter<br>
+            L FAA = panjang saluran dalam feet, dikonversi otomatis dari meter<br>
+            S = kemiringan saluran m/m atau ft/ft<br>
+            C FAA = koefisien limpasan permukaan<br>
             tc = waktu konsentrasi dalam menit<br>
             t = waktu konsentrasi dalam jam<br>
             Q = 0,00278 × C × I × A
@@ -2096,16 +2118,25 @@
 
     function updateFormHidrolika() {
       const jenisPerhitungan = document.getElementById("pilihPerhitunganHidrolika").value;
+      const metodeTc = document.getElementById("pilihMetodeTc").value;
       const qFields = document.getElementById("qRasionalFields");
+      const fieldFaa = document.getElementById("fieldFaa");
 
       if (jenisPerhitungan === "q_rasional") {
         qFields.style.display = "block";
+        fieldFaa.style.display = "none";
 
         if (intensitasTerakhir !== null && document.getElementById("intensitasQ").value === "") {
           document.getElementById("intensitasQ").value = intensitasTerakhir.toFixed(2);
         }
       } else {
         qFields.style.display = "none";
+
+        if (metodeTc === "faa") {
+          fieldFaa.style.display = "block";
+        } else {
+          fieldFaa.style.display = "none";
+        }
       }
     }
 
@@ -2191,6 +2222,7 @@
         hitungQRasional();
         return;
       }
+      const metodeTc = document.getElementById("pilihMetodeTc").value;
       const elevasiHulu = parseFloat(document.getElementById("elevasiHulu").value);
       const elevasiHilir = parseFloat(document.getElementById("elevasiHilir").value);
       const panjangSaluran = parseFloat(document.getElementById("panjangSaluran").value);
@@ -2228,7 +2260,28 @@
         return;
       }
 
-      const tcMenit = 0.0195 * Math.pow(panjangSaluran, 0.77) * Math.pow(slope, -0.385);
+      let tcMenit = null;
+      let panjangFeet = panjangSaluran * 3.28084;
+      let cFaa = null;
+
+      if (metodeTc === "kirpich") {
+        tcMenit = 0.0195 * Math.pow(panjangSaluran, 0.77) * Math.pow(slope, -0.385);
+      }
+
+      if (metodeTc === "faa") {
+        cFaa = parseFloat(document.getElementById("nilaiCFaa").value);
+
+        if (isNaN(cFaa) || cFaa < 0 || cFaa > 1) {
+          hasilDiv.innerHTML = `
+            <div class="hasil-hidrolika">
+              Mohon isi nilai C FAA antara 0 sampai 1.
+            </div>
+          `;
+          return;
+        }
+
+        tcMenit = (1.8 * (1.1 - cFaa) * Math.pow(panjangFeet, 0.5)) / Math.pow(slope, 0.33);
+      }
 
       /*
         tcJamAsli = hasil asli dari tc menit / 60.
@@ -2260,6 +2313,10 @@
 
           <table>
             <tr>
+              <td>Metode tc</td>
+              <td>${metodeTc === "kirpich" ? "Kirpich" : "FAA"}</td>
+            </tr>
+            <tr>
               <td>Elevasi Hulu</td>
               <td>${formatAngka(elevasiHulu, 3)} m</td>
             </tr>
@@ -2281,10 +2338,23 @@
             </tr>
       `;
 
+      if (metodeTc === "faa") {
+        html += `
+            <tr>
+              <td>Panjang Saluran</td>
+              <td>${formatAngka(panjangFeet, 2)} feet</td>
+            </tr>
+            <tr>
+              <td>C FAA</td>
+              <td>${formatAngka(cFaa, 3)}</td>
+            </tr>
+        `;
+      }
+
       if (jenisPerhitungan === "tc_intensitas" || jenisPerhitungan === "tc") {
         html += `
             <tr>
-              <td>tc Kirpich</td>
+              <td>tc ${metodeTc === "kirpich" ? "Kirpich" : "FAA"}</td>
               <td>${formatAngka(tcMenit, 3)} menit</td>
             </tr>
             <tr>
@@ -2313,7 +2383,7 @@
           <div class="statistik-kecil">
             Catatan:<br>
             - Slope dihitung dari (Elevasi Hulu − Elevasi Hilir) / Panjang Saluran.<br>
-            - tc Kirpich menggunakan satuan menit.<br>
+            - tc Kirpich dan FAA menggunakan satuan menit.<br>
             - Untuk rumus intensitas, nilai t menggunakan tc dalam satuan jam.<br>
             - Intensitas dihitung memakai tc jam yang dibulatkan 3 angka desimal agar mendekati format tabel manual.
           </div>
@@ -2325,6 +2395,7 @@
 
     document.getElementById("btnHitungHidrolika").addEventListener("click", hitungHidrolika);
     document.getElementById("pilihPerhitunganHidrolika").addEventListener("change", updateFormHidrolika);
+    document.getElementById("pilihMetodeTc").addEventListener("change", updateFormHidrolika);
     document.getElementById("btnTambahTutupanLahan").addEventListener("click", tambahTutupanLahan);
     document.getElementById("pilihTutupanLahan").addEventListener("change", updateRentangC);
     updateFormHidrolika();
