@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
 
   <style>
     body {
@@ -372,6 +373,43 @@
       text-align: right;
     }
 
+    /* PANEL HASIL UKUR PETA */
+    #measurementPanel {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      background: white;
+      z-index: 1001;
+      min-width: 280px;
+      max-width: 420px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+      font-size: 12px;
+      display: none;
+    }
+
+    #measurementPanel b {
+      color: #0f766e;
+    }
+
+    #measurementPanel button {
+      margin-top: 8px;
+      margin-right: 5px;
+      padding: 6px 8px;
+      border: none;
+      border-radius: 4px;
+      background: #0f766e;
+      color: white;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    #measurementPanel button:hover {
+      background: #0b5f59;
+    }
+
     @media (max-width: 900px) {
       #hydraulicPanel {
         width: 45%;
@@ -590,10 +628,14 @@
         </div>
       </div>
     </div>
+
+    <div id="measurementPanel"></div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
 
   <script>
     var map = L.map("map").setView([-6.225, 106.900], 11);
@@ -2170,6 +2212,166 @@
         map.invalidateSize();
       }, 300);
     });
+
+    /* FITUR GAMBAR DAN UKUR PETA */
+    let layerGambarUkur = new L.FeatureGroup();
+    map.addLayer(layerGambarUkur);
+
+    let luasTerakhirHa = null;
+    let panjangTerakhirM = null;
+
+    const drawControl = new L.Control.Draw({
+      position: "topleft",
+      draw: {
+        polygon: {
+          allowIntersection: false,
+          showArea: true,
+          shapeOptions: {
+            color: "#0f766e",
+            weight: 2,
+            fillOpacity: 0.25
+          }
+        },
+        polyline: {
+          shapeOptions: {
+            color: "#dc2626",
+            weight: 3
+          }
+        },
+        rectangle: false,
+        circle: false,
+        marker: false,
+        circlemarker: false
+      },
+      edit: {
+        featureGroup: layerGambarUkur,
+        remove: true
+      }
+    });
+
+    map.addControl(drawControl);
+
+    function tampilkanPanelUkur(html) {
+      const panel = document.getElementById("measurementPanel");
+      panel.style.display = "block";
+      panel.innerHTML = html;
+    }
+
+    function tutupPanelUkur() {
+      const panel = document.getElementById("measurementPanel");
+      panel.style.display = "none";
+      panel.innerHTML = "";
+    }
+
+    function hitungLuasPolygon(layer) {
+      const geojson = layer.toGeoJSON();
+      const luasM2 = turf.area(geojson);
+      const luasHa = luasM2 / 10000;
+
+      luasTerakhirHa = luasHa;
+
+      const popupHtml = `
+        <b>Hasil Ukur Catchment Area</b><br>
+        Luas: ${luasHa.toFixed(4)} ha<br>
+        Luas: ${luasM2.toFixed(2)} m²<br><br>
+        <button onclick="gunakanLuasKeQRasional()">Gunakan ke Q Rancangan</button>
+      `;
+
+      layer.bindPopup(popupHtml).openPopup();
+
+      tampilkanPanelUkur(`
+        <b>Polygon Catchment Area</b><br>
+        Luas: ${luasHa.toFixed(4)} ha<br>
+        Luas: ${luasM2.toFixed(2)} m²<br>
+        <button onclick="gunakanLuasKeQRasional()">Gunakan ke Q Rancangan</button>
+        <button onclick="tutupPanelUkur()">Tutup</button>
+      `);
+    }
+
+    function hitungPanjangLine(layer) {
+      const geojson = layer.toGeoJSON();
+      const panjangKm = turf.length(geojson, { units: "kilometers" });
+      const panjangM = panjangKm * 1000;
+
+      panjangTerakhirM = panjangM;
+
+      const popupHtml = `
+        <b>Hasil Ukur Panjang Saluran</b><br>
+        Panjang: ${panjangM.toFixed(2)} m<br>
+        Panjang: ${panjangKm.toFixed(4)} km<br><br>
+        <button onclick="gunakanPanjangKeL()">Gunakan ke Panjang Saluran</button>
+      `;
+
+      layer.bindPopup(popupHtml).openPopup();
+
+      tampilkanPanelUkur(`
+        <b>Garis Panjang Saluran</b><br>
+        Panjang: ${panjangM.toFixed(2)} m<br>
+        Panjang: ${panjangKm.toFixed(4)} km<br>
+        <button onclick="gunakanPanjangKeL()">Gunakan ke Panjang Saluran</button>
+        <button onclick="tutupPanelUkur()">Tutup</button>
+      `);
+    }
+
+    function prosesLayerUkur(layer) {
+      const geojson = layer.toGeoJSON();
+      const tipe = geojson.geometry.type;
+
+      if (tipe === "Polygon" || tipe === "MultiPolygon") {
+        hitungLuasPolygon(layer);
+      }
+
+      if (tipe === "LineString" || tipe === "MultiLineString") {
+        hitungPanjangLine(layer);
+      }
+    }
+
+    map.on(L.Draw.Event.CREATED, function (event) {
+      const layer = event.layer;
+      layerGambarUkur.addLayer(layer);
+      prosesLayerUkur(layer);
+    });
+
+    map.on(L.Draw.Event.EDITED, function (event) {
+      event.layers.eachLayer(function (layer) {
+        prosesLayerUkur(layer);
+      });
+    });
+
+    function gunakanLuasKeQRasional() {
+      if (luasTerakhirHa === null) {
+        alert("Belum ada polygon catchment yang diukur.");
+        return;
+      }
+
+      document.getElementById("pilihPerhitunganHidrolika").value = "q_rasional";
+      updateFormHidrolika();
+      document.getElementById("luasTutupanLahan").value = luasTerakhirHa.toFixed(4);
+      document.getElementById("luasTutupanLahan").focus();
+
+      tampilkanPanelUkur(`
+        <b>Luas berhasil dimasukkan</b><br>
+        Luas ${luasTerakhirHa.toFixed(4)} ha sudah masuk ke kolom Luas Area Tutupan Lahan.<br>
+        Pilih tata guna lahan, isi nilai C, lalu klik Tambah Tutupan Lahan.
+        <br><button onclick="tutupPanelUkur()">Tutup</button>
+      `);
+    }
+
+    function gunakanPanjangKeL() {
+      if (panjangTerakhirM === null) {
+        alert("Belum ada garis saluran yang diukur.");
+        return;
+      }
+
+      document.getElementById("panjangSaluran").value = panjangTerakhirM.toFixed(2);
+      document.getElementById("panjangSaluran").focus();
+
+      tampilkanPanelUkur(`
+        <b>Panjang berhasil dimasukkan</b><br>
+        Panjang ${panjangTerakhirM.toFixed(2)} m sudah masuk ke kolom Panjang Saluran / L.
+        <br><button onclick="tutupPanelUkur()">Tutup</button>
+      `);
+    }
   </script>
 </body>
 </html>
