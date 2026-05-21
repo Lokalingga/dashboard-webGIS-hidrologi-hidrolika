@@ -704,8 +704,8 @@
             </label>
 
             <div class="rumus-box">
-              <b>Tutupan Lahan / Koefisien C</b><br>
-              Pilih jenis tutupan lahan, isi luas area dalam hektar, lalu klik tambah.
+              <b>Tahap 2: Tutupan Lahan / Koefisien C</b><br>
+              Setelah I terisi, pilih tata guna lahan, isi nilai C, isi luas area dalam hektar, lalu klik tambah.
             </div>
 
             <label>
@@ -751,7 +751,8 @@
             <div id="daftarTutupanLahan" class="hasil-hidrolika" style="display: none;"></div>
           </div>
 
-          <button id="btnHitungHidrolika">Hitung Hidrolika</button>
+          <button id="btnHitungIntensitas" type="button">1. Hitung Intensitas Hujan / I</button>
+          <button id="btnHitungHidrolika">3. Hitung Hidrolika / Q Rencana</button>
 
           <div class="rumus-box">
             <b>Rumus yang digunakan:</b><br>
@@ -2140,6 +2141,155 @@
       }
     }
 
+    function hitungIntensitasSaja() {
+      const jenisPerhitungan = document.getElementById("pilihPerhitunganHidrolika").value;
+      const metodeTc = document.getElementById("pilihMetodeTc").value;
+      const elevasiHulu = parseFloat(document.getElementById("elevasiHulu").value);
+      const elevasiHilir = parseFloat(document.getElementById("elevasiHilir").value);
+      const panjangSaluran = parseFloat(document.getElementById("panjangSaluran").value);
+      const r24 = parseFloat(document.getElementById("r24Hujan").value);
+      const hasilDiv = document.getElementById("hasilHidrolika");
+
+      if (isNaN(elevasiHulu) || isNaN(elevasiHilir) || isNaN(panjangSaluran)) {
+        hasilDiv.innerHTML = `
+          <div class="hasil-hidrolika">
+            Mohon isi elevasi hulu, elevasi hilir, dan panjang saluran terlebih dahulu.
+          </div>
+        `;
+        return;
+      }
+
+      if (panjangSaluran <= 0) {
+        hasilDiv.innerHTML = `
+          <div class="hasil-hidrolika">
+            Panjang saluran harus lebih besar dari 0.
+          </div>
+        `;
+        return;
+      }
+
+      if (isNaN(r24) || r24 <= 0) {
+        hasilDiv.innerHTML = `
+          <div class="hasil-hidrolika">
+            Mohon isi nilai R24 / hujan harian maksimum lebih besar dari 0.
+          </div>
+        `;
+        return;
+      }
+
+      const bedaElevasi = elevasiHulu - elevasiHilir;
+      const slope = bedaElevasi / panjangSaluran;
+
+      if (slope <= 0) {
+        hasilDiv.innerHTML = `
+          <div class="hasil-hidrolika">
+            Nilai slope tidak boleh 0 atau negatif.<br>
+            Pastikan elevasi hulu lebih besar dari elevasi hilir.
+          </div>
+        `;
+        return;
+      }
+
+      let tcMenit = null;
+      let panjangFeet = panjangSaluran * 3.28084;
+      let cFaa = null;
+
+      if (metodeTc === "kirpich") {
+        tcMenit = 0.0195 * Math.pow(panjangSaluran, 0.77) * Math.pow(slope, -0.385);
+      }
+
+      if (metodeTc === "faa") {
+        cFaa = parseFloat(document.getElementById("nilaiCFaa").value);
+
+        if (isNaN(cFaa) || cFaa < 0 || cFaa > 1) {
+          hasilDiv.innerHTML = `
+            <div class="hasil-hidrolika">
+              Mohon isi nilai C FAA antara 0 sampai 1.
+            </div>
+          `;
+          return;
+        }
+
+        tcMenit = (1.8 * (1.1 - cFaa) * Math.pow(panjangFeet, 0.5)) / Math.pow(slope, 0.33);
+      }
+
+      const tcJamAsli = tcMenit / 60;
+      const tcJam = parseFloat(tcJamAsli.toFixed(3));
+      const intensitas = (r24 / 24) * Math.pow(24 / tcJam, 2 / 3);
+
+      intensitasTerakhir = intensitas;
+      document.getElementById("intensitasQ").value = intensitas.toFixed(2);
+
+      let html = `
+        <div class="hasil-hidrolika">
+          <b>Hasil Tahap 1: Intensitas Hujan</b>
+
+          <table>
+            <tr>
+              <td>Metode tc</td>
+              <td>${metodeTc === "kirpich" ? "Kirpich" : "FAA"}</td>
+            </tr>
+            <tr>
+              <td>Beda Elevasi</td>
+              <td>${formatAngka(bedaElevasi, 3)} m</td>
+            </tr>
+            <tr>
+              <td>Panjang Saluran / L</td>
+              <td>${formatAngka(panjangSaluran, 2)} m</td>
+            </tr>
+            <tr>
+              <td>Slope / S</td>
+              <td>${formatAngka(slope, 6)} m/m</td>
+            </tr>
+      `;
+
+      if (metodeTc === "faa") {
+        html += `
+            <tr>
+              <td>Panjang Saluran</td>
+              <td>${formatAngka(panjangFeet, 2)} feet</td>
+            </tr>
+            <tr>
+              <td>C FAA</td>
+              <td>${formatAngka(cFaa, 3)}</td>
+            </tr>
+        `;
+      }
+
+      html += `
+            <tr>
+              <td>tc</td>
+              <td>${formatAngka(tcMenit, 3)} menit</td>
+            </tr>
+            <tr>
+              <td>tc</td>
+              <td>${formatAngka(tcJam, 3)} jam</td>
+            </tr>
+            <tr>
+              <td>R24</td>
+              <td>${formatAngka(r24, 2)} mm</td>
+            </tr>
+            <tr>
+              <td>Intensitas / I</td>
+              <td><b>${formatAngka(intensitas, 2)} mm/jam</b></td>
+            </tr>
+          </table>
+
+          <div class="statistik-kecil">
+            Nilai I sudah otomatis masuk ke kolom Intensitas Hujan / I pada menu Q Rancangan.<br>
+            Lanjutkan dengan memilih tata guna lahan, mengisi nilai C, menambahkan luas A, lalu klik Hitung Q Rencana.
+          </div>
+        </div>
+      `;
+
+      hasilDiv.innerHTML = html;
+
+      if (jenisPerhitungan !== "q_rasional") {
+        document.getElementById("pilihPerhitunganHidrolika").value = "q_rasional";
+        updateFormHidrolika();
+      }
+    }
+
     function hitungQRasional() {
       const intensitas = parseFloat(document.getElementById("intensitasQ").value);
       const hasilDiv = document.getElementById("hasilHidrolika");
@@ -2175,7 +2325,7 @@
 
       let html = `
         <div class="hasil-hidrolika">
-          <b>Hasil Q Rancangan Metode Rasional</b>
+          <b>Hasil Tahap 3: Q Rancangan Metode Rasional</b>
 
           <table>
             <tr>
@@ -2393,6 +2543,7 @@
       hasilDiv.innerHTML = html;
     }
 
+    document.getElementById("btnHitungIntensitas").addEventListener("click", hitungIntensitasSaja);
     document.getElementById("btnHitungHidrolika").addEventListener("click", hitungHidrolika);
     document.getElementById("pilihPerhitunganHidrolika").addEventListener("change", updateFormHidrolika);
     document.getElementById("pilihMetodeTc").addEventListener("change", updateFormHidrolika);
