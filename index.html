@@ -528,18 +528,37 @@
             </div>
 
             <label>
-              Jenis Tutupan Lahan (C)
+              Tata Guna Lahan
               <select id="pilihTutupanLahan">
-                <option value="0.95" data-nama="Beton / Atap">Beton / Atap (0.95)</option>
-                <option value="0.90" data-nama="Aspal / Jalan">Aspal / Jalan (0.90)</option>
-                <option value="0.70" data-nama="Kawasan Urban">Kawasan Urban (0.70)</option>
-                <option value="0.50" data-nama="Permukiman Padat">Permukiman Padat (0.50)</option>
-                <option value="0.40" data-nama="Permukiman Sedang">Permukiman Sedang (0.40)</option>
-                <option value="0.30" data-nama="Taman / Padang Rumput">Taman / Padang Rumput (0.30)</option>
-                <option value="0.25" data-nama="Lahan Kosong">Lahan Kosong (0.25)</option>
-                <option value="0.20" data-nama="Hutan / Lahan Terbuka">Hutan / Lahan Terbuka (0.20)</option>
+                <option value="" data-min="" data-max="">Pilih tata guna lahan</option>
+                <option value="Kawasan Kota" data-min="0.70" data-max="0.95">Bisnis - Kawasan Kota (0.70 - 0.95)</option>
+                <option value="Kawasan Pinggiran" data-min="0.50" data-max="0.70">Bisnis - Kawasan Pinggiran (0.50 - 0.70)</option>
+                <option value="Kawasan Keluarga Tunggal" data-min="0.30" data-max="0.50">Perumahan - Keluarga Tunggal (0.30 - 0.50)</option>
+                <option value="Multi Satuan Terpisah" data-min="0.40" data-max="0.60">Perumahan - Multi Satuan Terpisah (0.40 - 0.60)</option>
+                <option value="Multi Satuan Berdempetan" data-min="0.60" data-max="0.75">Perumahan - Multi Satuan Berdempetan/Rapat (0.60 - 0.75)</option>
+                <option value="Pemukiman Pinggiran Kota" data-min="0.25" data-max="0.40">Kawasan Pemukiman Pinggiran Kota (0.25 - 0.40)</option>
+                <option value="Rumah Susun / Apartemen" data-min="0.50" data-max="0.70">Rumah Susun / Apartemen (0.50 - 0.70)</option>
+                <option value="Perindustrian" data-min="0.50" data-max="0.90">Perindustrian Ringan - Berat (0.50 - 0.90)</option>
+                <option value="Taman dan Kuburan" data-min="0.10" data-max="0.25">Taman-taman dan Kuburan (0.10 - 0.25)</option>
+                <option value="Lapangan Bermain" data-min="0.20" data-max="0.35">Lapangan Bermain (0.20 - 0.35)</option>
+                <option value="Halaman Kereta Api" data-min="0.20" data-max="0.40">Kawasan Halaman Kereta Api (0.20 - 0.40)</option>
+                <option value="Belum Dimanfaatkan" data-min="0.10" data-max="0.30">Kawasan Belum Dimanfaatkan (0.10 - 0.30)</option>
+                <option value="Jalan Beraspal" data-min="0.70" data-max="0.95">Jalan - Beraspal (0.70 - 0.95)</option>
+                <option value="Jalan Beton" data-min="0.80" data-max="0.95">Jalan - Beton (0.80 - 0.95)</option>
+                <option value="Paving Block / Con Block" data-min="0.70" data-max="0.85">Jalan - Batu Bata / Paving Block / Con Block (0.70 - 0.85)</option>
+                <option value="Jalan Raya dan Trotoar" data-min="0.70" data-max="0.85">Jalan Raya dan Trotoar (0.70 - 0.85)</option>
+                <option value="Manual / Lainnya" data-min="0" data-max="1">Manual / Lainnya (0.00 - 1.00)</option>
               </select>
             </label>
+
+            <label>
+              Nilai Koefisien Limpasan / C
+              <input type="number" id="nilaiCManual" placeholder="Pilih tata guna lahan atau isi manual, contoh: 0.70" step="0.001" min="0" max="1">
+            </label>
+
+            <div id="infoRentangC" class="statistik-kecil" style="margin-bottom: 10px;">
+              Pilih tata guna lahan untuk melihat rentang nilai C, lalu isi nilai C manual sesuai kondisi lapangan.
+            </div>
 
             <label>
               Luas Area Tutupan Lahan (ha)
@@ -1840,13 +1859,27 @@
     function tambahTutupanLahan() {
       const select = document.getElementById("pilihTutupanLahan");
       const option = select.options[select.selectedIndex];
-      const nama = option.getAttribute("data-nama");
-      const c = parseFloat(select.value);
+      const nama = select.value || "Manual / Lainnya";
+      const cMin = parseFloat(option.getAttribute("data-min"));
+      const cMax = parseFloat(option.getAttribute("data-max"));
+      const c = parseFloat(document.getElementById("nilaiCManual").value);
       const luas = parseFloat(document.getElementById("luasTutupanLahan").value);
+
+      if (isNaN(c) || c < 0 || c > 1) {
+        alert("Mohon isi nilai C secara manual antara 0 sampai 1.");
+        return;
+      }
 
       if (isNaN(luas) || luas <= 0) {
         alert("Mohon isi luas tutupan lahan lebih besar dari 0.");
         return;
+      }
+
+      if (!isNaN(cMin) && !isNaN(cMax) && (c < cMin || c > cMax)) {
+        const lanjut = confirm("Nilai C yang kamu isi berada di luar rentang tabel untuk kategori ini. Tetap tambahkan?");
+        if (!lanjut) {
+          return;
+        }
       }
 
       daftarTutupanLahanQ.push({
@@ -1857,6 +1890,29 @@
 
       document.getElementById("luasTutupanLahan").value = "";
       renderDaftarTutupanLahan();
+    }
+
+    function updateRentangC() {
+      const select = document.getElementById("pilihTutupanLahan");
+      const option = select.options[select.selectedIndex];
+      const cMin = option.getAttribute("data-min");
+      const cMax = option.getAttribute("data-max");
+      const inputC = document.getElementById("nilaiCManual");
+      const info = document.getElementById("infoRentangC");
+
+      if (cMin === "" || cMax === "") {
+        info.innerHTML = "Pilih tata guna lahan untuk melihat rentang nilai C, lalu isi nilai C manual sesuai kondisi lapangan.";
+        inputC.placeholder = "Contoh: 0.70";
+        return;
+      }
+
+      info.innerHTML = `Rentang C berdasarkan tabel: <b>${parseFloat(cMin).toFixed(2)} - ${parseFloat(cMax).toFixed(2)}</b>. Isi nilai C manual dalam rentang tersebut sesuai kondisi lapangan.`;
+      inputC.placeholder = `Contoh: ${parseFloat(cMin).toFixed(2)} s/d ${parseFloat(cMax).toFixed(2)}`;
+
+      if (inputC.value === "") {
+        const nilaiTengah = (parseFloat(cMin) + parseFloat(cMax)) / 2;
+        inputC.value = nilaiTengah.toFixed(2);
+      }
     }
 
     function hapusTutupanLahan(index) {
@@ -2096,7 +2152,9 @@
     document.getElementById("btnHitungHidrolika").addEventListener("click", hitungHidrolika);
     document.getElementById("pilihPerhitunganHidrolika").addEventListener("change", updateFormHidrolika);
     document.getElementById("btnTambahTutupanLahan").addEventListener("click", tambahTutupanLahan);
+    document.getElementById("pilihTutupanLahan").addEventListener("change", updateRentangC);
     updateFormHidrolika();
+    updateRentangC();
 
     document.getElementById("toggleHydraulicPanel").addEventListener("click", function () {
       const panel = document.getElementById("hydraulicPanel");
