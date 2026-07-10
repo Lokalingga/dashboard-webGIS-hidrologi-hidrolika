@@ -2,12 +2,15 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>Peta Sebaran Hujan</title>
+  <title>WebGIS Data Hujan dan Drainase</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
 
   <style>
+    * { box-sizing: border-box; }
+
     body {
       margin: 0;
       font-family: Arial, sans-serif;
@@ -18,545 +21,961 @@
     header {
       background: #0f766e;
       color: white;
-      padding: 14px 20px;
+      padding: 12px 20px;
+      height: 66px;
     }
 
     header h1 {
       margin: 0;
-      font-size: 22px;
+      font-size: 21px;
+      line-height: 1.2;
     }
 
     header p {
       margin: 4px 0 0;
-      font-size: 14px;
+      font-size: 13px;
     }
 
     #appContainer {
       display: flex;
       width: 100%;
-      height: calc(100vh - 76px);
-    }
-
-    #panel {
-      width: 360px;
-      min-width: 360px;
-      height: 100%;
-      background: white;
-      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.25);
-      z-index: 1000;
-      overflow-y: auto;
-      transition: width 0.3s ease, min-width 0.3s ease;
-    }
-
-    #panelHeader {
-      background: #333;
-      color: white;
-      padding: 12px;
-      font-weight: bold;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    #togglePanel {
-      background: transparent;
-      border: 1px solid white;
-      color: white;
-      width: 28px;
-      height: 28px;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 16px;
-      line-height: 1;
-      flex-shrink: 0;
-    }
-
-    #panelContent {
-      padding: 14px;
-      box-sizing: border-box;
-      font-size: 14px;
-    }
-
-    #panel.minimized {
-      width: 46px;
-      min-width: 46px;
+      height: calc(100vh - 66px);
+      position: relative;
       overflow: hidden;
     }
 
-    #panel.minimized #panelContent {
-      display: none !important;
-    }
-
-    #panel.minimized #panelHeader {
+    #layerPanel,
+    #segmentPanel {
       height: 100%;
-      writing-mode: vertical-rl;
-      text-orientation: mixed;
-      justify-content: center;
+      background: white;
+      z-index: 1000;
+      font-size: 13px;
+      overflow: hidden;
+      transition: width 0.3s ease, min-width 0.3s ease;
+    }
+
+    #layerPanel {
+      width: 22%;
+      min-width: 280px;
+      max-width: 420px;
+      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.25);
+    }
+
+    #segmentPanel {
+      width: 28%;
+      min-width: 390px;
+      max-width: 560px;
+      box-shadow: -2px 0 8px rgba(0, 0, 0, 0.25);
+    }
+
+    #layerHeader,
+    #segmentHeader {
+      color: white;
+      padding: 11px 12px;
+      display: flex;
+      justify-content: space-between;
       align-items: center;
-      gap: 12px;
-      padding: 10px 4px;
+      font-weight: bold;
+      height: 46px;
     }
 
-    #panel.minimized #panelHeader span {
-      transform: rotate(180deg);
-      white-space: nowrap;
+    #layerHeader { background: #333; }
+    #segmentHeader { background: #0f766e; }
+
+    #togglePanel,
+    #toggleSegmentPanel {
+      background: transparent;
+      color: white;
+      border: 1px solid rgba(255,255,255,0.8);
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      width: 24px;
+      height: 24px;
+      line-height: 18px;
     }
 
-    #panel.minimized #togglePanel {
-      transform: rotate(90deg);
-      min-width: 28px;
-    }
-
-    #panel.minimized *:not(#panelHeader):not(#panelHeader span):not(#togglePanel) {
-      display: none !important;
+    #layerContent,
+    #segmentContent {
+      padding: 12px;
+      overflow-y: auto;
+      height: calc(100% - 46px);
+      box-sizing: border-box;
     }
 
     #map {
       flex: 1;
       height: 100%;
+      min-width: 0;
     }
 
-    .control-group {
-      margin-bottom: 16px;
-      padding-bottom: 14px;
-      border-bottom: 1px solid #e5e7eb;
+    #layerPanel.minimized,
+    #segmentPanel.minimized {
+      width: 42px;
+      min-width: 42px;
     }
 
-    .control-group h3 {
-      margin: 0 0 10px;
-      font-size: 15px;
+    #layerPanel.minimized #layerHeader,
+    #segmentPanel.minimized #segmentHeader {
+      height: 100%;
+      padding: 8px 4px;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    #layerPanel.minimized #layerHeader span,
+    #segmentPanel.minimized #segmentHeader span {
+      transform: rotate(180deg);
+      white-space: nowrap;
+    }
+
+    #layerPanel.minimized #togglePanel,
+    #segmentPanel.minimized #toggleSegmentPanel {
+      transform: rotate(90deg);
+      min-width: 24px;
+    }
+
+    #layerPanel.minimized #layerContent,
+    #segmentPanel.minimized #segmentContent {
+      display: none;
+    }
+
+    .layer-item,
+    .layer-subitem {
+      display: block;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+
+    .layer-subitem {
+      font-size: 12.5px;
+    }
+
+    .layer-group {
+      margin-top: 12px;
+      border-top: 1px solid #ddd;
+      padding-top: 10px;
+    }
+
+    .group-title {
+      font-weight: bold;
+      cursor: pointer;
+      margin-bottom: 8px;
+      color: #333;
+      user-select: none;
+    }
+
+    .group-content { padding-left: 16px; }
+
+    .popup-title {
+      font-weight: bold;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    .popup-table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 12px;
+    }
+
+    .popup-table td {
+      padding: 3px 5px;
+      border-bottom: 1px solid #eee;
+      vertical-align: top;
+    }
+
+    .popup-table td:first-child {
+      font-weight: bold;
+      color: #333;
+      white-space: nowrap;
+    }
+
+    .box {
+      background: #f8fafc;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+
+    .box-white {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+
+    .box h3,
+    .box-white h3 {
+      margin: 0 0 9px;
       color: #0f766e;
+      font-size: 14px;
     }
 
     label {
       display: block;
-      margin-bottom: 11px;
+      margin-bottom: 9px;
       font-weight: bold;
-      font-size: 13px;
+      font-size: 12.5px;
     }
 
+    input,
     select,
-    input[type="range"],
-    input[type="file"] {
-      width: 100%;
-      margin-top: 5px;
-      padding: 7px;
-      box-sizing: border-box;
-      border: 1px solid #cbd5e1;
-      border-radius: 5px;
+    button,
+    textarea {
       font-family: Arial, sans-serif;
-      font-size: 13px;
-      background: white;
     }
 
-    input[type="checkbox"] {
-      margin-right: 6px;
+    input,
+    select {
+      width: 100%;
+      padding: 7px;
+      margin-top: 4px;
+      box-sizing: border-box;
+      border-radius: 5px;
+      border: 1px solid #bbb;
+      background: white;
+      font-size: 13px;
     }
 
     .btn {
-      display: block;
       width: 100%;
-      box-sizing: border-box;
-      text-align: center;
-      padding: 9px 10px;
-      margin-top: 8px;
-      border-radius: 6px;
-      background: #0f766e;
-      color: white;
-      text-decoration: none;
-      font-weight: bold;
+      padding: 8px 10px;
+      margin-top: 6px;
+      border-radius: 5px;
       border: none;
       cursor: pointer;
-      font-size: 13px;
+      font-weight: bold;
+      font-size: 12.5px;
+      background: #0f766e;
+      color: white;
     }
 
-    .btn:hover {
-      background: #0b5f59;
-    }
-
-    .btn-secondary {
-      background: #374151;
-    }
-
-    .btn-secondary:hover {
-      background: #1f2937;
-    }
-
-    .btn-danger {
-      background: #b91c1c;
-    }
-
-    .btn-danger:hover {
-      background: #991b1b;
-    }
-
-    .btn-warning {
-      background: #d97706;
-    }
-
-    .btn-warning:hover {
-      background: #b45309;
-    }
-
-    .btn-success {
-      background: #16a34a;
-    }
-
-    .btn-success:hover {
-      background: #15803d;
-    }
+    .btn:hover { background: #0b5f59; }
+    .btn-secondary { background: #374151; }
+    .btn-secondary:hover { background: #1f2937; }
+    .btn-danger { background: #b91c1c; }
+    .btn-danger:hover { background: #991b1b; }
+    .btn-warning { background: #d97706; }
+    .btn-warning:hover { background: #b45309; }
+    .btn-light { background: #e5e7eb; color: #111827; }
+    .btn-light:hover { background: #d1d5db; }
 
     .btn-row {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
-      margin-top: 8px;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
     }
 
-    .btn-row button {
-      padding: 7px 4px;
-      font-size: 12px;
+    .btn-row-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
     }
 
     .note {
-      font-size: 12px;
-      color: #6b7280;
-      line-height: 1.5;
-      margin-top: 8px;
+      font-size: 11.5px;
+      color: #555;
+      line-height: 1.45;
+      margin-top: 6px;
     }
 
-    .result-box {
+    .summary-sticky {
+      position: sticky;
+      top: 0;
+      z-index: 5;
       background: #ecfdf5;
       border: 1px solid #99f6e4;
+      border-left: 5px solid #0f766e;
       border-radius: 8px;
       padding: 10px;
-      font-size: 13px;
-      line-height: 1.55;
+      margin-bottom: 10px;
+      box-shadow: 0 2px 7px rgba(0,0,0,0.08);
     }
 
-    .result-box b {
-      color: #0f766e;
-    }
-
-    .color-preview {
-      width: 26px;
-      height: 18px;
-      display: inline-block;
-      border: 1px solid #777;
-      vertical-align: middle;
-      margin-left: 5px;
-    }
-
-    .legend {
-      background: #f9fafb;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      padding: 10px;
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
       font-size: 12px;
+    }
+
+    .summary-item {
+      background: white;
+      border-radius: 6px;
+      border: 1px solid #d1fae5;
+      padding: 7px;
+    }
+
+    .summary-item span {
+      color: #6b7280;
+      display: block;
+      font-size: 11px;
+    }
+
+    .summary-item b {
+      color: #0f766e;
+      font-size: 13px;
+    }
+
+    .status-pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+
+    .status-belum { background: #fef3c7; color: #92400e; }
+    .status-memenuhi { background: #dcfce7; color: #166534; }
+    .status-tidak { background: #fee2e2; color: #991b1b; }
+
+    .excel-table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      background: white;
+      max-height: 230px;
+      overflow-y: auto;
+    }
+
+    table.excel-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5px;
+      min-width: 820px;
+    }
+
+    .excel-table th,
+    .excel-table td {
+      border: 1px solid #d1d5db;
+      padding: 5px 6px;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .excel-table th {
+      background: #e5e7eb;
+      color: #111827;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .excel-table td:first-child,
+    .excel-table th:first-child {
+      text-align: left;
+    }
+
+    .excel-table tr.active-row {
+      background: #ecfdf5;
+    }
+
+    .clickable-row { cursor: pointer; }
+    .clickable-row:hover { background: #f1f5f9; }
+
+    .input-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .input-grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+
+    .step-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 0 0 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .step-title h3 {
+      margin: 0;
+      color: #0f766e;
+      font-size: 14px;
+    }
+
+    .step-title span {
+      color: #6b7280;
+      font-size: 12px;
+    }
+
+    .step-content.collapsed { display: none; }
+
+    .mini-result {
+      background: white;
+      border-left: 4px solid #0f766e;
+      padding: 8px;
+      margin-top: 7px;
+      line-height: 1.55;
+      font-size: 12px;
+    }
+
+    .landuse-row {
+      display: grid;
+      grid-template-columns: 1.25fr 0.55fr 0.65fr 32px;
+      gap: 5px;
+      align-items: end;
+      margin-bottom: 6px;
+    }
+
+    .landuse-row input,
+    .landuse-row select { font-size: 12px; padding: 6px; }
+
+    .hapus-mini {
+      background: #b91c1c;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      height: 31px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    #searchLocationPanel {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1002;
+      background: white;
+      border-radius: 9px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+      padding: 7px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      width: 500px;
+      max-width: calc(100% - 740px);
+    }
+
+    #searchLocationPanel input {
+      flex: 1;
+      margin: 0;
+      font-size: 13px;
+    }
+
+    #searchLocationPanel button {
+      padding: 8px 10px;
+      border: none;
+      border-radius: 5px;
+      background: #0f766e;
+      color: white;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    #searchResultList {
+      position: absolute;
+      top: 58px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1002;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+      width: 500px;
+      max-height: 260px;
+      overflow-y: auto;
+      display: none;
+      font-size: 12px;
+    }
+
+    .search-result-item {
+      padding: 9px 11px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+      line-height: 1.4;
+    }
+
+    .search-result-item:hover { background: #f1f5f9; }
+    .search-result-title { font-weight: bold; color: #0f766e; }
+
+    .lokasi-saya-marker {
+      width: 16px;
+      height: 16px;
+      background: #2563eb;
+      border: 3px solid white;
+      border-radius: 50%;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25), 0 2px 6px rgba(0, 0, 0, 0.35);
+    }
+
+    #measurementPanel {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      background: white;
+      z-index: 1001;
+      min-width: 300px;
+      max-width: 520px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+      font-size: 12px;
+      display: none;
       line-height: 1.5;
     }
 
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 4px 0;
-    }
+    #measurementPanel b { color: #0f766e; }
 
-    .legend-color {
-      width: 18px;
-      height: 12px;
-      border: 1px solid #999;
-      display: inline-block;
-    }
-
-    .marker-result {
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      border: 3px solid white;
-      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
-    }
-
-    .station-label {
-      background: white;
-      border: 1px solid #0f766e;
-      border-radius: 6px;
-      padding: 3px 6px;
-      font-size: 11px;
-      font-weight: bold;
-      color: #0f766e;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
-      text-align: center;
-    }
-
-    .small-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
+    #measurementPanel button {
       margin-top: 8px;
+      margin-right: 5px;
+      padding: 6px 8px;
+      border: none;
+      border-radius: 4px;
+      background: #0f766e;
+      color: white;
+      font-size: 12px;
+      cursor: pointer;
     }
 
-    .small-table th,
-    .small-table td {
-      border: 1px solid #d1d5db;
-      padding: 5px;
-      text-align: right;
+    .leaflet-div-icon.leaflet-editing-icon,
+    .leaflet-draw-guide-dash { border-radius: 50% !important; }
+
+    .leaflet-div-icon.leaflet-editing-icon {
+      width: 10px !important;
+      height: 10px !important;
+      margin-left: -5px !important;
+      margin-top: -5px !important;
+      background: white !important;
+      border: 2px solid #0f766e !important;
+      box-shadow: 0 0 3px rgba(0, 0, 0, 0.45) !important;
     }
 
-    .small-table th {
-      background: #e5e7eb;
-      text-align: center;
+    .leaflet-draw-tooltip {
+      background: rgba(0, 0, 0, 0.75) !important;
+      border-radius: 4px !important;
+      color: white !important;
+      font-size: 12px !important;
     }
 
-    .small-table td:first-child {
-      text-align: left;
+    @media (max-width: 1100px) {
+      #segmentPanel { min-width: 340px; width: 35%; }
+      #searchLocationPanel { max-width: 360px; width: 360px; }
+    }
+
+    @media (max-width: 850px) {
+      header { height: auto; }
+      #appContainer { height: calc(100vh - 76px); }
+      #layerPanel { min-width: 240px; }
+      #segmentPanel { min-width: 300px; }
+      #searchLocationPanel {
+        top: 8px;
+        width: 310px;
+        max-width: 310px;
+        flex-wrap: wrap;
+      }
+      #searchLocationPanel input { flex-basis: 100%; }
+      #searchResultList { width: 310px; top: 82px; }
     }
   </style>
 </head>
 
 <body>
   <header>
-    <h1>Peta Sebaran Hujan</h1>
-    <p>Overlay BMKG dan estimasi isohyet hujan rencana berbasis data stasiun</p>
+    <h1>WebGIS Data Hujan</h1>
+    <p>Peta digital untuk perhitungan hidrologi dan hidrolika drainase berbasis segmen</p>
   </header>
 
   <div id="appContainer">
-    <div id="panel">
-      <div id="panelHeader">
-        <span>Pengaturan Overlay</span>
+    <div id="layerPanel">
+      <div id="layerHeader">
+        <span>Layer Peta</span>
         <button id="togglePanel">−</button>
       </div>
 
-      <div id="panelContent">
-
-        <div class="control-group">
-          <h3>Sumber Analisis</h3>
-
-          <label>
-            Mode Tampilan
-            <select id="modeTampilan">
-              <option value="overlay">Overlay BMKG</option>
-              <option value="isohyet">Isohyet Kala Ulang IDW</option>
-              <option value="gabungan">Overlay + Isohyet</option>
-            </select>
-          </label>
-
-          <div class="note">
-            Mode Overlay membaca warna dari JPG BMKG. Mode Isohyet memakai nilai hujan rencana final dari CSV.
-          </div>
-        </div>
-
-        <div class="control-group">
-          <h3>Cek Hujan pada Lokasi</h3>
-
-          <button class="btn btn-warning" id="btnModeCekArea">Aktifkan Mode Cek Area</button>
-
-          <div class="note">
-            Setelah mode aktif, klik lokasi pada peta untuk membaca kategori hujan sesuai mode tampilan.
+      <div id="layerContent">
+        <div class="layer-group" style="border-top:none; margin-top:0; padding-top:0;">
+          <div class="group-title" onclick="toggleGroup('groupLayerPeta', 'iconLayerPeta')">
+            <span id="iconLayerPeta">▾</span> Layer Drainase
           </div>
 
-          <div id="hasilCekArea" class="result-box" style="margin-top:10px;">
-            Belum ada area yang dicek.
-          </div>
+          <div class="group-content" id="groupLayerPeta" style="padding-left:0;">
+            <label class="layer-item"><input type="checkbox" id="cekStasiunHujan" checked> Stasiun Hujan</label>
+            <label class="layer-item"><input type="checkbox" id="cekSaluranPrimer"> Saluran Primer</label>
+            <label class="layer-item"><input type="checkbox" id="cekSaluranSekunder"> Saluran Sekunder</label>
 
-          <button class="btn btn-secondary" id="btnResetHasilCek">Reset Hasil Cek</button>
-        </div>
-
-        <div class="control-group">
-          <h3>Peta Sebaran Hujan BMKG</h3>
-
-          <label>
-            Transparansi Overlay
-            <input type="range" id="opacityOverlayHujan" min="0" max="100" value="60">
-          </label>
-
-          <div class="btn-row">
-            <button class="btn" onclick="setOpacityPreset(35)">35%</button>
-            <button class="btn" onclick="setOpacityPreset(60)">60%</button>
-            <button class="btn" onclick="setOpacityPreset(85)">85%</button>
-          </div>
-
-          <button class="btn" id="btnZoomOverlay">Zoom ke Overlay</button>
-
-          <div class="note">
-            Overlay menggunakan koordinat pojok gambar dari Google Earth.
-          </div>
-        </div>
-
-        <div class="control-group">
-          <h3>Upload Overlay Sementara</h3>
-
-          <label>
-            Upload JPG/PNG
-            <input type="file" id="uploadOverlay" accept=".jpg,.jpeg,.png,.webp">
-          </label>
-
-          <button class="btn btn-danger" id="btnHapusUpload">Hapus Overlay Upload</button>
-
-          <div class="note">
-            Upload ini hanya untuk percobaan sementara dan hilang saat halaman di-refresh.
-          </div>
-        </div>
-
-        <div class="control-group">
-          <h3>Isohyet Hujan Rencana IDW</h3>
-
-          <label>
-            Kala Ulang
-            <select id="pilihKalaUlang">
-              <option value="T2">2 tahun</option>
-              <option value="T5" selected>5 tahun</option>
-              <option value="T10">10 tahun</option>
-            </select>
-          </label>
-
-          <label>
-            Interval Garis Isohyet
-            <select id="pilihIntervalIsohyet">
-              <option value="10">10 mm</option>
-              <option value="25" selected>25 mm</option>
-              <option value="50">50 mm</option>
-            </select>
-          </label>
-
-          <label>
-            Power IDW
-            <select id="pilihPowerIDW">
-              <option value="1">1</option>
-              <option value="2" selected>2</option>
-              <option value="3">3</option>
-            </select>
-          </label>
-
-          <button class="btn" id="btnTampilkanIsohyet">Tampilkan / Perbarui Isohyet</button>
-          <button class="btn btn-danger" id="btnHapusIsohyet">Hapus Isohyet</button>
-
-          <div class="note">
-            Nilai hujan rencana diambil dari file <b>hujan_rencana_3stasiun.csv</b>, lalu diinterpolasi dengan IDW.
-          </div>
-
-          <div id="rekapIsohyet" class="note"></div>
-        </div>
-
-        <div class="control-group">
-          <h3>Basemap</h3>
-
-          <label>
-            Pilih Basemap
-            <select id="pilihBasemap">
-              <option value="googleHybrid">Google Hybrid</option>
-              <option value="googleMaps">Google Maps</option>
-              <option value="googleSatellite">Google Satellite / Earth</option>
-              <option value="osmMap">OpenStreetMap</option>
-              <option value="esriSatellite">Esri Satellite</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="control-group">
-          <h3>Layer Referensi</h3>
-
-          <label>
-            <input type="checkbox" id="cekStasiunHujan" checked>
-            Tampilkan stasiun hujan
-          </label>
-
-          <label>
-            <input type="checkbox" id="cekNilaiStasiun" checked>
-            Tampilkan label nilai stasiun
-          </label>
-
-          <div class="note">
-            Titik dan nilai stasiun mengikuti data pada file <b>hujan_rencana_3stasiun.csv</b>.
-          </div>
-        </div>
-
-        <div class="control-group">
-          <h3>Legenda Hujan</h3>
-
-          <div class="legend">
-            <div class="legend-item">
-              <span class="legend-color" style="background:#d1d5db;"></span>
-              Tidak Hujan: 0 mm/hari
+            <div class="layer-group">
+              <div class="group-title" onclick="toggleGroup('groupPHB', 'iconPHB')">
+                <span id="iconPHB">▾</span> Saluran PHB
+              </div>
+              <div class="group-content" id="groupPHB"></div>
             </div>
-            <div class="legend-item">
-              <span class="legend-color" style="background:#4ade80;"></span>
-              Ringan: 0.5 - 20 mm/hari
-            </div>
-            <div class="legend-item">
-              <span class="legend-color" style="background:#fde047;"></span>
-              Sedang: 20 - 50 mm/hari
-            </div>
-            <div class="legend-item">
-              <span class="legend-color" style="background:#fb923c;"></span>
-              Lebat: 50 - 100 mm/hari
-            </div>
-            <div class="legend-item">
-              <span class="legend-color" style="background:#ef4444;"></span>
-              Sangat Lebat: 100 - 150 mm/hari
-            </div>
-            <div class="legend-item">
-              <span class="legend-color" style="background:#d946ef;"></span>
-              Ekstrem: >150 mm/hari
+
+            <div class="layer-group">
+              <div class="group-title" onclick="toggleGroup('groupMikro', 'iconMikro')">
+                <span id="iconMikro">▾</span> Saluran Mikro
+              </div>
+              <div class="group-content" id="groupMikro"></div>
             </div>
           </div>
+        </div>
 
-          <div class="note">
-            Catatan: warna legenda di atas digunakan untuk kategori hujan. Warna isohyet IDW memakai gradasi nilai relatif dari rendah ke tinggi.
+        <div class="layer-group">
+          <div class="group-title" onclick="toggleGroup('groupBasemap', 'iconBasemap')">
+            <span id="iconBasemap">▾</span> Basemap
+          </div>
+          <div class="group-content" id="groupBasemap" style="padding-left:0;">
+            <label class="layer-item"><input type="radio" name="basemap" value="googleMaps" checked> Google Maps</label>
+            <label class="layer-item"><input type="radio" name="basemap" value="googleSatellite"> Google Satellite / Earth</label>
+            <label class="layer-item"><input type="radio" name="basemap" value="googleHybrid"> Google Hybrid</label>
+            <label class="layer-item"><input type="radio" name="basemap" value="osmMap"> OpenStreetMap</label>
+            <label class="layer-item"><input type="radio" name="basemap" value="esriSatellite"> Esri Satellite</label>
           </div>
         </div>
 
-        <a href="index.html" class="btn btn-secondary">Kembali ke Home</a>
-        <a href="webgis.html" class="btn btn-secondary">Buka WebGIS Drainase</a>
+        <div class="layer-group">
+          <div class="group-title" onclick="toggleGroup('groupPetunjuk', 'iconPetunjuk')">
+            <span id="iconPetunjuk">▾</span> Alur Kerja
+          </div>
+          <div class="group-content" id="groupPetunjuk" style="padding-left:0;">
+            <div class="note">
+              1. Tambah segmen saluran.<br>
+              2. Gambar catchment area dan panjang aliran.<br>
+              3. Isi elevasi, R24, dan tutupan lahan.<br>
+              4. Hitung Q rencana.<br>
+              5. Isi dimensi saluran untuk cek kapasitas.
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
     <div id="map"></div>
+
+    <div id="segmentPanel">
+      <div id="segmentHeader">
+        <span>Perhitungan Segmen</span>
+        <button id="toggleSegmentPanel">−</button>
+      </div>
+
+      <div id="segmentContent">
+        <div class="summary-sticky">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px;">
+            <b id="judulSegmenAktif">Belum ada segmen</b>
+            <span id="statusSegmenAktif" class="status-pill status-belum">Belum Lengkap</span>
+          </div>
+          <div class="summary-grid">
+            <div class="summary-item"><span>Q Rencana</span><b id="sumQRencana">-</b></div>
+            <div class="summary-item"><span>Q Saluran</span><b id="sumQSaluran">-</b></div>
+            <div class="summary-item"><span>I Hujan</span><b id="sumIntensitas">-</b></div>
+            <div class="summary-item"><span>CA Total</span><b id="sumCA">-</b></div>
+          </div>
+        </div>
+
+        <div class="box-white">
+          <h3>Data Proyek</h3>
+          <label>
+            Nama Lokasi / Pekerjaan
+            <input type="text" id="namaProyek" value="Jalan Raya Pondok Gede" placeholder="Contoh: Jalan Raya Pondok Gede">
+          </label>
+          <div class="input-grid-2">
+            <label>
+              R24 Default (mm)
+              <input type="number" id="r24Default" value="205.93" step="0.001">
+            </label>
+            <label>
+              Kala Ulang
+              <select id="kalaUlangDefault">
+                <option value="2">2 tahun</option>
+                <option value="5" selected>5 tahun</option>
+                <option value="10">10 tahun</option>
+              </select>
+            </label>
+          </div>
+          <button class="btn btn-light" id="btnTerapkanR24Semua">Terapkan R24 ke Semua Segmen</button>
+        </div>
+
+        <div class="box-white">
+          <h3>Daftar Segmen seperti Excel</h3>
+          <div class="input-grid-2">
+            <label>
+              Segmen Aktif
+              <select id="pilihSegmenAktif"></select>
+            </label>
+            <label>
+              Tambah Cepat
+              <button class="btn" id="btnTambahSegmen" type="button">+ Tambah Segmen</button>
+            </label>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary" id="btnDuplikatSegmen" type="button">Duplikat Segmen</button>
+            <button class="btn btn-danger" id="btnHapusSegmen" type="button">Hapus Segmen</button>
+          </div>
+          <div class="excel-table-wrap" style="margin-top:10px;">
+            <table class="excel-table" id="tabelRekapSegmen">
+              <thead>
+                <tr>
+                  <th>Segmen</th><th>L</th><th>S</th><th>Tc</th><th>I</th><th>A</th><th>Cgab</th><th>Qr</th><th>Qs</th><th>Status</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="box step-box">
+          <div class="step-title" onclick="toggleStep('stepIdentitas', 'iconStepIdentitas')">
+            <h3>1. Identitas Segmen</h3><span id="iconStepIdentitas">▾</span>
+          </div>
+          <div class="step-content" id="stepIdentitas">
+            <label>
+              Nama Segmen Saluran
+              <input type="text" id="namaSegmen" placeholder="Contoh: Saluran I Sisi Selatan">
+            </label>
+            <div class="input-grid-2">
+              <label>
+                Sisi / Arah
+                <select id="sisiSegmen">
+                  <option value="Selatan">Sisi Selatan</option>
+                  <option value="Utara">Sisi Utara</option>
+                  <option value="Timur">Sisi Timur</option>
+                  <option value="Barat">Sisi Barat</option>
+                  <option value="Lainnya">Lainnya</option>
+                </select>
+              </label>
+              <label>
+                Warna Segmen
+                <select id="warnaSegmen">
+                  <option value="#dc2626">Merah</option>
+                  <option value="#2563eb">Biru</option>
+                  <option value="#16a34a">Hijau</option>
+                  <option value="#d97706">Oranye</option>
+                  <option value="#7c3aed">Ungu</option>
+                  <option value="#0f766e">Toska</option>
+                </select>
+              </label>
+            </div>
+            <button class="btn" id="btnSimpanIdentitas">Simpan Identitas Segmen</button>
+          </div>
+        </div>
+
+        <div class="box step-box">
+          <div class="step-title" onclick="toggleStep('stepCA', 'iconStepCA')">
+            <h3>2. Catchment Area</h3><span id="iconStepCA">▾</span>
+          </div>
+          <div class="step-content" id="stepCA">
+            <div class="btn-row">
+              <button class="btn" id="btnGambarCA" type="button">Gambar CA</button>
+              <button class="btn btn-light" id="btnInputCAManual" type="button">Input Manual</button>
+            </div>
+            <label>
+              Luas CA Total (ha)
+              <input type="number" id="luasCATotal" step="0.0001" placeholder="Otomatis dari polygon atau isi manual">
+            </label>
+            <div class="note">
+              Polygon CA yang digambar akan otomatis mengisi luas CA dalam hektar.
+            </div>
+          </div>
+        </div>
+
+        <div class="box step-box">
+          <div class="step-title" onclick="toggleStep('stepPanjang', 'iconStepPanjang')">
+            <h3>3. Panjang, Elevasi, dan Slope</h3><span id="iconStepPanjang">▾</span>
+          </div>
+          <div class="step-content" id="stepPanjang">
+            <div class="btn-row">
+              <button class="btn" id="btnGambarPanjang" type="button">Gambar Panjang</button>
+              <button class="btn btn-light" id="btnInputPanjangManual" type="button">Input Manual</button>
+            </div>
+            <label>
+              Panjang Saluran / L (m)
+              <input type="number" id="panjangSaluran" step="0.001" placeholder="Contoh: 986">
+            </label>
+            <div class="input-grid-2">
+              <label>
+                Elevasi Hulu (m)
+                <input type="number" id="elevasiHulu" step="0.001" placeholder="Contoh: 33.45">
+              </label>
+              <label>
+                Elevasi Hilir (m)
+                <input type="number" id="elevasiHilir" step="0.001" placeholder="Contoh: 31.79">
+              </label>
+            </div>
+            <label>
+              Slope Manual / S0 (opsional)
+              <input type="number" id="slopeManual" step="0.000001" placeholder="Contoh: 0.003 jika ingin langsung pakai slope tabel">
+            </label>
+            <div class="mini-result" id="hasilSlopeMini">Slope belum dihitung.</div>
+          </div>
+        </div>
+
+        <div class="box step-box">
+          <div class="step-title" onclick="toggleStep('stepIntensitas', 'iconStepIntensitas')">
+            <h3>4. Tc dan Intensitas Hujan</h3><span id="iconStepIntensitas">▾</span>
+          </div>
+          <div class="step-content" id="stepIntensitas">
+            <div class="input-grid-2">
+              <label>
+                R24 (mm)
+                <input type="number" id="r24Segmen" step="0.001" placeholder="Contoh: 205.93">
+              </label>
+              <label>
+                Metode Tc
+                <select id="metodeTc">
+                  <option value="kirpich" selected>Kirpich</option>
+                </select>
+              </label>
+            </div>
+            <button class="btn" id="btnHitungIntensitas" type="button">Hitung Intensitas</button>
+            <div class="mini-result" id="hasilIntensitasMini">Tc dan intensitas belum dihitung.</div>
+          </div>
+        </div>
+
+        <div class="box step-box">
+          <div class="step-title" onclick="toggleStep('stepC', 'iconStepC')">
+            <h3>5. Tata Guna Lahan dan C Gabungan</h3><span id="iconStepC">▾</span>
+          </div>
+          <div class="step-content" id="stepC">
+            <div class="landuse-row">
+              <label>
+                Jenis
+                <select id="jenisTutupan">
+                  <option value="Pemukiman" data-c="0.70">Pemukiman</option>
+                  <option value="Jalan" data-c="0.75">Jalan</option>
+                  <option value="Jalan Beton" data-c="0.80">Jalan Beton</option>
+                  <option value="Perindustrian" data-c="0.80">Perindustrian</option>
+                  <option value="Taman" data-c="0.20">Taman</option>
+                  <option value="Manual" data-c="0.70">Manual</option>
+                </select>
+              </label>
+              <label>
+                C
+                <input type="number" id="nilaiCTutupan" value="0.70" step="0.001" min="0" max="1">
+              </label>
+              <label>
+                A (ha)
+                <input type="number" id="luasTutupan" step="0.0001" placeholder="ha">
+              </label>
+              <button class="hapus-mini" id="btnTambahTutupan" title="Tambah" type="button">+</button>
+            </div>
+            <button class="btn btn-light" id="btnBagiSisaCA" type="button">Isi Luas Sisa CA ke Baris Ini</button>
+            <div class="excel-table-wrap" style="margin-top:8px; max-height:160px;">
+              <table class="excel-table" id="tabelTutupan">
+                <thead>
+                  <tr><th>Jenis</th><th>C</th><th>A (ha)</th><th>C x A</th><th>Aksi</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="mini-result" id="hasilCMini">C gabungan belum dihitung.</div>
+          </div>
+        </div>
+
+        <div class="box step-box">
+          <div class="step-title" onclick="toggleStep('stepQ', 'iconStepQ')">
+            <h3>6. Q Limpasan Rasional</h3><span id="iconStepQ">▾</span>
+          </div>
+          <div class="step-content" id="stepQ">
+            <button class="btn" id="btnHitungQ" type="button">Hitung Q Rencana</button>
+            <div class="mini-result" id="hasilQMini">Q rencana belum dihitung.</div>
+          </div>
+        </div>
+
+        <div class="box step-box">
+          <div class="step-title" onclick="toggleStep('stepKapasitas', 'iconStepKapasitas')">
+            <h3>7. Kapasitas Saluran</h3><span id="iconStepKapasitas">▾</span>
+          </div>
+          <div class="step-content" id="stepKapasitas">
+            <label>
+              Jenis Saluran
+              <select id="jenisSaluranKapasitas">
+                <option value="rect">U-Ditch / Box Culvert Persegi</option>
+                <option value="rcp">Round Concrete Pipe / RCP</option>
+              </select>
+            </label>
+
+            <div id="fieldRect">
+              <div class="input-grid-3">
+                <label>
+                  b (m)
+                  <input type="number" id="lebarSaluran" step="0.001" placeholder="1.00">
+                </label>
+                <label>
+                  h (m)
+                  <input type="number" id="tinggiSaluran" step="0.001" placeholder="1.00">
+                </label>
+                <label>
+                  Jagaan (m)
+                  <input type="number" id="jagaanSaluran" value="0.01" step="0.001">
+                </label>
+              </div>
+            </div>
+
+            <div id="fieldRcp" style="display:none;">
+              <div class="input-grid-2">
+                <label>
+                  Diameter D (m)
+                  <input type="number" id="diameterRcp" step="0.001" placeholder="1.00">
+                </label>
+                <label>
+                  Tinggi Air y (m)
+                  <input type="number" id="tinggiAirRcp" step="0.001" placeholder="Kosongkan jika penuh">
+                </label>
+              </div>
+            </div>
+
+            <div class="input-grid-2">
+              <label>
+                S Kapasitas
+                <input type="number" id="slopeKapasitas" step="0.000001" placeholder="Otomatis dari slope hidrologi">
+              </label>
+              <label>
+                n Manning
+                <input type="number" id="manningN" value="0.015" step="0.001">
+              </label>
+            </div>
+            <button class="btn" id="btnHitungKapasitas" type="button">Hitung Kapasitas Saluran</button>
+            <div class="mini-result" id="hasilKapasitasMini">Kapasitas saluran belum dihitung.</div>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="btnSimpanLocal" type="button">Simpan Data</button>
+          <button class="btn btn-danger" id="btnResetSemua" type="button">Reset Semua</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="searchLocationPanel">
+      <input type="text" id="inputCariJalan" placeholder="Cari jalan/lokasi, contoh: Jalan Raya Pondok Gede">
+      <button type="button" id="btnCariJalan">Cari</button>
+      <button type="button" id="btnLokasiSaya">Lokasi Saya</button>
+    </div>
+
+    <div id="searchResultList"></div>
+    <div id="measurementPanel"></div>
   </div>
 
-  <canvas id="canvasOverlay" style="display:none;"></canvas>
-
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/IvanSanchez/Leaflet.ImageOverlay.Rotated/Leaflet.ImageOverlay.Rotated.js"></script>
+  <script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
 
   <script>
-    const titikOverlayDefault = {
-      kiriAtas: [-5.517008, 106.293177],
-      kananAtas: [-5.511926, 107.654318],
-      kiriBawah: [-6.859648, 106.298205],
-      kananBawah: [-6.854593, 107.659360]
-    };
-
-    const overlayUtama = {
-      id: "hujan_2026_01_17",
-      nama: "Peta Sebaran Hujan 17 Januari 2026",
-      file: "17 Januari 2026.jpg",
-      tanggal: "17 Januari 2026",
-      periode: "17 Januari 2026 pukul 07.00 WIB s.d. 18 Januari 2026 pukul 07.00 WIB",
-      sumber: "BMKG",
-      titik: titikOverlayDefault
-    };
-
-    const kategoriWarna = [
-      { nama: "Tidak Hujan", warnaTampil: "#d1d5db", sampel: [[210,210,210],[150,170,180],[75,165,205],[65,150,190]] },
-      { nama: "Ringan", warnaTampil: "#4ade80", sampel: [[74,222,128],[90,210,80],[120,220,70]] },
-      { nama: "Sedang", warnaTampil: "#fde047", sampel: [[253,224,71],[245,210,45],[235,190,45]] },
-      { nama: "Lebat", warnaTampil: "#fb923c", sampel: [[251,146,60],[235,120,40],[220,105,35]] },
-      { nama: "Sangat Lebat", warnaTampil: "#ef4444", sampel: [[239,68,68],[220,50,50],[200,40,45]] },
-      { nama: "Ekstrem", warnaTampil: "#d946ef", sampel: [[217,70,239],[200,50,180],[180,45,160]] }
-    ];
-
-    const map = L.map("map", {
-      center: [-6.225, 106.900],
-      zoom: 9
-    });
+    var map = L.map("map", { zoomControl: true }).setView([-6.225, 106.900], 11);
 
     const googleMaps = L.tileLayer("https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}", {
       maxZoom: 20,
       subdomains: ["mt0", "mt1", "mt2", "mt3"],
       attribution: "&copy; Google Maps"
-    });
+    }).addTo(map);
 
     const googleSatellite = L.tileLayer("https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", {
       maxZoom: 20,
@@ -568,7 +987,7 @@
       maxZoom: 20,
       subdomains: ["mt0", "mt1", "mt2", "mt3"],
       attribution: "&copy; Google Hybrid"
-    }).addTo(map);
+    });
 
     const osmMap = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
@@ -577,976 +996,1002 @@
 
     const esriSatellite = L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      {
-        maxZoom: 20,
-        attribution: "Tiles &copy; Esri"
-      }
+      { maxZoom: 20, attribution: "Tiles &copy; Esri" }
     );
 
-    let basemapAktif = googleHybrid;
+    let basemapAktif = googleMaps;
 
-    map.createPane("paneOverlayHujan");
-    map.createPane("paneIsohyet");
-    map.createPane("paneIsohyetLine");
-    map.createPane("paneHasilCek");
+    map.createPane("paneMikro");
+    map.createPane("panePHB");
+    map.createPane("paneSekunder");
+    map.createPane("panePrimer");
     map.createPane("paneStasiun");
-    map.createPane("paneLabelStasiun");
+    map.createPane("paneSegmen");
+    map.createPane("paneCA");
 
-    map.getPane("paneOverlayHujan").style.zIndex = 420;
-    map.getPane("paneIsohyet").style.zIndex = 430;
-    map.getPane("paneIsohyetLine").style.zIndex = 450;
-    map.getPane("paneStasiun").style.zIndex = 530;
-    map.getPane("paneLabelStasiun").style.zIndex = 535;
-    map.getPane("paneHasilCek").style.zIndex = 540;
-
-    let overlayHujanAktif = null;
-    let overlayUploadAktif = null;
-    let overlayAktifInfo = null;
-
-    let layerStasiunHujan = L.layerGroup().addTo(map);
-    let layerLabelStasiun = L.layerGroup().addTo(map);
-    let layerIsohyet = L.layerGroup().addTo(map);
-    let layerIsohyetLine = L.layerGroup().addTo(map);
-
-    let markerHasilCek = null;
-    let modeCekArea = false;
-
-    let overlayImage = null;
-    let overlayCanvasSiap = false;
-
-    let dataHujanRencana = [];
-    let nilaiRencanaStasiun = [];
-    let gridIsohyet = null;
-
-    function angka(value) {
-      return parseFloat(String(value).replace(",", "."));
-    }
-
-    function formatAngka(value, digit = 2) {
-      if (value === null || value === undefined || isNaN(value)) return "-";
-      return Number(value).toFixed(digit);
-    }
-
-    function estimasiCurahHujan(kategori) {
-      const data = {
-        "Tidak Hujan": "0 mm/hari",
-        "Ringan": "0.5 - 20 mm/hari",
-        "Sedang": "20 - 50 mm/hari",
-        "Lebat": "50 - 100 mm/hari",
-        "Sangat Lebat": "100 - 150 mm/hari",
-        "Ekstrem": "> 150 mm/hari"
-      };
-
-      return data[kategori] || "-";
-    }
-
-    function kategoriDariNilai(nilai) {
-      if (nilai <= 0) return "Tidak Hujan";
-      if (nilai < 20) return "Ringan";
-      if (nilai < 50) return "Sedang";
-      if (nilai < 100) return "Lebat";
-      if (nilai < 150) return "Sangat Lebat";
-      return "Ekstrem";
-    }
-
-    function warnaDariNilai(nilai) {
-      if (nilai <= 0) return "#d1d5db";
-      if (nilai < 20) return "#4ade80";
-      if (nilai < 50) return "#fde047";
-      if (nilai < 100) return "#fb923c";
-      if (nilai < 150) return "#ef4444";
-      return "#d946ef";
-    }
-
-    function warnaIsohyet(nilai, min, max) {
-      const rentang = max - min || 1;
-      const ratio = Math.max(0, Math.min(1, (nilai - min) / rentang));
-      const hue = 220 - ratio * 220;
-      return `hsl(${hue}, 85%, 55%)`;
-    }
+    map.getPane("paneMikro").style.zIndex = 410;
+    map.getPane("panePHB").style.zIndex = 420;
+    map.getPane("paneSekunder").style.zIndex = 430;
+    map.getPane("panePrimer").style.zIndex = 440;
+    map.getPane("paneCA").style.zIndex = 445;
+    map.getPane("paneSegmen").style.zIndex = 448;
+    map.getPane("paneStasiun").style.zIndex = 450;
 
     function parseCsvOtomatis(csvText) {
       const rows = csvText.trim().split(/\r?\n/);
       const firstLine = rows[0];
       const delimiter = firstLine.includes(";") ? ";" : ",";
       const headers = firstLine.split(delimiter).map(h => h.trim());
-
       return rows.slice(1).map(row => {
         const values = row.split(delimiter);
         const obj = {};
-
-        headers.forEach((header, index) => {
-          obj[header] = values[index] ? values[index].trim() : "";
-        });
-
+        headers.forEach((header, index) => { obj[header] = values[index] ? values[index].trim() : ""; });
         return obj;
       });
     }
 
-    function boundsDariTitik(titik) {
-      return [
-        titik.kiriAtas,
-        titik.kananAtas,
-        titik.kiriBawah,
-        titik.kananBawah
-      ];
+    function angka(value) { return parseFloat(String(value).replace(",", ".")); }
+    function formatAngka(nilai, digit) {
+      if (nilai === null || nilai === undefined || isNaN(nilai) || !isFinite(nilai)) return "-";
+      return Number(nilai).toFixed(digit);
     }
 
-    function buatRotatedOverlay(file, titik, opacity) {
-      return L.imageOverlay.rotated(
-        file,
-        titik.kiriAtas,
-        titik.kananAtas,
-        titik.kiriBawah,
-        {
-          opacity: opacity,
-          interactive: false,
-          pane: "paneOverlayHujan"
-        }
-      );
-    }
-
-    function muatGambarKeCanvas(src) {
-      overlayCanvasSiap = false;
-
-      const img = new Image();
-
-      img.onload = function () {
-        overlayImage = img;
-
-        const canvas = document.getElementById("canvasOverlay");
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-
-        overlayCanvasSiap = true;
-      };
-
-      img.onerror = function () {
-        overlayCanvasSiap = false;
-        console.error("Gagal memuat gambar overlay untuk analisis warna.");
-      };
-
-      img.src = src;
-    }
-
-    function muatOverlayUtama() {
-      if (overlayHujanAktif) {
-        map.removeLayer(overlayHujanAktif);
-      }
-
-      if (overlayUploadAktif) {
-        map.removeLayer(overlayUploadAktif);
-        overlayUploadAktif = null;
-        document.getElementById("uploadOverlay").value = "";
-      }
-
-      const opacity = Number(document.getElementById("opacityOverlayHujan").value) / 100;
-
-      overlayHujanAktif = buatRotatedOverlay(overlayUtama.file, overlayUtama.titik, opacity);
-      overlayHujanAktif.addTo(map);
-
-      overlayAktifInfo = overlayUtama;
-      muatGambarKeCanvas(overlayUtama.file);
-      resetHasilCek();
-    }
-
-    function setOpacityOverlay() {
-      const opacity = Number(document.getElementById("opacityOverlayHujan").value) / 100;
-
-      if (overlayHujanAktif) overlayHujanAktif.setOpacity(opacity);
-      if (overlayUploadAktif) overlayUploadAktif.setOpacity(opacity);
-    }
-
-    function setOpacityPreset(value) {
-      document.getElementById("opacityOverlayHujan").value = value;
-      setOpacityOverlay();
-    }
-
-    function zoomKeOverlay() {
-      if (overlayAktifInfo) {
-        map.fitBounds(boundsDariTitik(overlayAktifInfo.titik));
-      }
-    }
-
-    function uploadOverlaySementara(event) {
-      const file = event.target.files[0];
-
-      if (!file) return;
-
-      const reader = new FileReader();
-
-      reader.onload = function(e) {
-        if (overlayUploadAktif) map.removeLayer(overlayUploadAktif);
-        if (overlayHujanAktif) map.removeLayer(overlayHujanAktif);
-
-        const opacity = Number(document.getElementById("opacityOverlayHujan").value) / 100;
-        const imageUrl = e.target.result;
-
-        overlayUploadAktif = buatRotatedOverlay(imageUrl, titikOverlayDefault, opacity);
-        overlayUploadAktif.addTo(map);
-
-        overlayAktifInfo = {
-          id: "upload_sementara",
-          nama: "Overlay Upload Sementara",
-          file: file.name,
-          titik: titikOverlayDefault
-        };
-
-        muatGambarKeCanvas(imageUrl);
-        map.fitBounds(boundsDariTitik(titikOverlayDefault));
-        resetHasilCek();
-      };
-
-      reader.readAsDataURL(file);
-    }
-
-    function hapusOverlayUpload() {
-      if (overlayUploadAktif) {
-        map.removeLayer(overlayUploadAktif);
-        overlayUploadAktif = null;
-      }
-
-      document.getElementById("uploadOverlay").value = "";
-      muatOverlayUtama();
-      terapkanModeTampilan();
-    }
-
-    function gantiBasemap() {
-      const pilihan = document.getElementById("pilihBasemap").value;
-
-      if (basemapAktif) map.removeLayer(basemapAktif);
-
-      if (pilihan === "googleMaps") {
-        basemapAktif = googleMaps;
-      } else if (pilihan === "googleSatellite") {
-        basemapAktif = googleSatellite;
-      } else if (pilihan === "osmMap") {
-        basemapAktif = osmMap;
-      } else if (pilihan === "esriSatellite") {
-        basemapAktif = esriSatellite;
+    function toggleGroup(groupId, iconId) {
+      var group = document.getElementById(groupId);
+      var icon = document.getElementById(iconId);
+      if (group.style.display === "none") {
+        group.style.display = "block";
+        icon.textContent = "▾";
       } else {
-        basemapAktif = googleHybrid;
-      }
-
-      basemapAktif.addTo(map);
-
-      if (overlayHujanAktif) overlayHujanAktif.bringToFront();
-      if (overlayUploadAktif) overlayUploadAktif.bringToFront();
-      if (markerHasilCek) markerHasilCek.bringToFront();
-    }
-
-    function loadDataHujanRencana() {
-      fetch("hujan_rencana_3stasiun.csv")
-        .then(response => response.text())
-        .then(csvText => {
-          dataHujanRencana = parseCsvOtomatis(csvText);
-          loadStasiunHujan();
-        })
-        .catch(error => {
-          console.error("Gagal membaca hujan_rencana_3stasiun.csv", error);
-          alert("File hujan_rencana_3stasiun.csv belum terbaca. Pastikan nama file sudah benar.");
-        });
-    }
-
-    function loadStasiunHujan() {
-      layerStasiunHujan.clearLayers();
-
-      dataHujanRencana.forEach(row => {
-        const lat = angka(row.latitude);
-        const lng = angka(row.longitude);
-        const nama = row.stasiun;
-
-        if (isNaN(lat) || isNaN(lng)) return;
-
-        const marker = L.circleMarker([lat, lng], {
-          pane: "paneStasiun",
-          radius: 7,
-          color: "#ffffff",
-          weight: 2,
-          fillColor: "#0f766e",
-          fillOpacity: 1
-        });
-
-        marker.bindPopup(`
-          <b>${nama}</b><br>
-          Latitude: ${lat}<br>
-          Longitude: ${lng}
-        `);
-
-        marker.addTo(layerStasiunHujan);
-      });
-    }
-
-    function toggleStasiunHujan() {
-      if (document.getElementById("cekStasiunHujan").checked) {
-        map.addLayer(layerStasiunHujan);
-      } else {
-        map.removeLayer(layerStasiunHujan);
+        group.style.display = "none";
+        icon.textContent = "▸";
       }
     }
 
-    function toggleLabelStasiun() {
-      if (document.getElementById("cekNilaiStasiun").checked) {
-        map.addLayer(layerLabelStasiun);
-      } else {
-        map.removeLayer(layerLabelStasiun);
-      }
-    }
-
-    function hitungHujanRencanaSemuaStasiun() {
-      const kolomKalaUlang = document.getElementById("pilihKalaUlang").value;
-      const hasil = [];
-
-      dataHujanRencana.forEach(row => {
-        const nilai = angka(row[kolomKalaUlang]);
-        const lat = angka(row.latitude);
-        const lng = angka(row.longitude);
-
-        if (!isNaN(nilai) && nilai > 0 && !isNaN(lat) && !isNaN(lng)) {
-          hasil.push({
-            nama: row.stasiun,
-            lat: lat,
-            lng: lng,
-            nilai: nilai
-          });
-        }
-      });
-
-      return hasil;
-    }
-
-    function jarakMeter(lat1, lng1, lat2, lng2) {
-      const R = 6371000;
-      const rad = Math.PI / 180;
-
-      const dLat = (lat2 - lat1) * rad;
-      const dLng = (lng2 - lng1) * rad;
-
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * rad) * Math.cos(lat2 * rad) *
-        Math.sin(dLng / 2) * Math.sin(dLng / 2);
-
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-      return R * c;
-    }
-
-    function hitungIDW(lat, lng, dataStasiun, power) {
-      let pembilang = 0;
-      let penyebut = 0;
-
-      for (const stasiun of dataStasiun) {
-        const d = jarakMeter(lat, lng, stasiun.lat, stasiun.lng);
-
-        if (d < 1) return stasiun.nilai;
-
-        const w = 1 / Math.pow(d, power);
-        pembilang += w * stasiun.nilai;
-        penyebut += w;
-      }
-
-      return pembilang / penyebut;
-    }
-
-    function tampilkanLabelStasiun() {
-      layerLabelStasiun.clearLayers();
-
-      if (nilaiRencanaStasiun.length === 0) return;
-
-      nilaiRencanaStasiun.forEach(stasiun => {
-        const icon = L.divIcon({
-          className: "",
-          html: `<div class="station-label">${stasiun.nama}<br>${formatAngka(stasiun.nilai, 2)} mm</div>`,
-          iconSize: [100, 38],
-          iconAnchor: [-8, 34]
-        });
-
-        L.marker([stasiun.lat, stasiun.lng], {
-          icon,
-          pane: "paneLabelStasiun",
-          interactive: false
-        }).addTo(layerLabelStasiun);
-      });
-
-      toggleLabelStasiun();
-    }
-
-    function tampilkanIsohyet() {
-      if (dataHujanRencana.length === 0) {
-        alert("Data hujan rencana belum selesai dimuat.");
-        return;
-      }
-
-      layerIsohyet.clearLayers();
-      layerIsohyetLine.clearLayers();
-
-      const kalaUlang = document.getElementById("pilihKalaUlang").value;
-      const power = Number(document.getElementById("pilihPowerIDW").value);
-      const interval = Number(document.getElementById("pilihIntervalIsohyet").value);
-
-      nilaiRencanaStasiun = hitungHujanRencanaSemuaStasiun();
-
-      if (nilaiRencanaStasiun.length < 3) {
-        alert("Data stasiun belum cukup untuk membuat isohyet.");
-        return;
-      }
-
-      const bbox = {
-        south: -6.85,
-        north: -5.52,
-        west: 106.29,
-        east: 107.66
-      };
-
-      const rows = 34;
-      const cols = 34;
-
-      const dLat = (bbox.north - bbox.south) / rows;
-      const dLng = (bbox.east - bbox.west) / cols;
-
-      const nilaiGrid = [];
-      let nilaiMin = Infinity;
-      let nilaiMax = -Infinity;
-
-      for (let i = 0; i <= rows; i++) {
-        nilaiGrid[i] = [];
-        const lat = bbox.south + i * dLat;
-
-        for (let j = 0; j <= cols; j++) {
-          const lng = bbox.west + j * dLng;
-          const nilai = hitungIDW(lat, lng, nilaiRencanaStasiun, power);
-
-          nilaiGrid[i][j] = nilai;
-          nilaiMin = Math.min(nilaiMin, nilai);
-          nilaiMax = Math.max(nilaiMax, nilai);
-        }
-      }
-
-      gridIsohyet = {
-        bbox,
-        rows,
-        cols,
-        dLat,
-        dLng,
-        nilaiGrid,
-        nilaiMin,
-        nilaiMax,
-        power,
-        kalaUlang
-      };
-
-      for (let i = 0; i < rows; i++) {
-        for (let j = 0; j < cols; j++) {
-          const lat1 = bbox.south + i * dLat;
-          const lat2 = bbox.south + (i + 1) * dLat;
-          const lng1 = bbox.west + j * dLng;
-          const lng2 = bbox.west + (j + 1) * dLng;
-
-          const nilai =
-            (nilaiGrid[i][j] +
-             nilaiGrid[i + 1][j] +
-             nilaiGrid[i][j + 1] +
-             nilaiGrid[i + 1][j + 1]) / 4;
-
-          L.rectangle([[lat1, lng1], [lat2, lng2]], {
-            pane: "paneIsohyet",
-            stroke: false,
-            fillColor: warnaIsohyet(nilai, nilaiMin, nilaiMax),
-            fillOpacity: 0.42,
-            interactive: false
-          }).addTo(layerIsohyet);
-        }
-      }
-
-      const startLevel = Math.ceil(nilaiMin / interval) * interval;
-      const endLevel = Math.floor(nilaiMax / interval) * interval;
-
-      for (let level = startLevel; level <= endLevel; level += interval) {
-        gambarKonturSederhana(level, nilaiGrid, bbox, rows, cols, dLat, dLng);
-      }
-
-      tampilkanLabelStasiun();
-
-      document.getElementById("rekapIsohyet").innerHTML = `
-        <b>Hasil Hujan Rencana ${kalaUlang.replace("T", "")} Tahun</b>
-        <table class="small-table">
-          <thead>
-            <tr>
-              <th>Stasiun</th>
-              <th>Hujan Rencana</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${nilaiRencanaStasiun.map(s => `
-              <tr>
-                <td>${s.nama}</td>
-                <td>${formatAngka(s.nilai, 2)} mm</td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-        <div class="note">
-          Nilai interpolasi IDW berkisar ${formatAngka(nilaiMin, 2)} - ${formatAngka(nilaiMax, 2)} mm.
-        </div>
-      `;
-
-      terapkanModeTampilan();
-    }
-
-    function titikInterpolasi(p1, p2, v1, v2, level) {
-      if (v1 === v2) return p1;
-
-      const t = (level - v1) / (v2 - v1);
-
-      return [
-        p1[0] + t * (p2[0] - p1[0]),
-        p1[1] + t * (p2[1] - p1[1])
-      ];
-    }
-
-    function gambarKonturSederhana(level, grid, bbox, rows, cols, dLat, dLng) {
-      for (let i = 0; i < rows; i++) {
-        for (let j = 0; j < cols; j++) {
-          const lat0 = bbox.south + i * dLat;
-          const lat1 = bbox.south + (i + 1) * dLat;
-          const lng0 = bbox.west + j * dLng;
-          const lng1 = bbox.west + (j + 1) * dLng;
-
-          const pBL = [lat0, lng0];
-          const pBR = [lat0, lng1];
-          const pTR = [lat1, lng1];
-          const pTL = [lat1, lng0];
-
-          const vBL = grid[i][j];
-          const vBR = grid[i][j + 1];
-          const vTR = grid[i + 1][j + 1];
-          const vTL = grid[i + 1][j];
-
-          const potong = [];
-
-          if ((vBL - level) * (vBR - level) < 0) {
-            potong.push(titikInterpolasi(pBL, pBR, vBL, vBR, level));
-          }
-
-          if ((vBR - level) * (vTR - level) < 0) {
-            potong.push(titikInterpolasi(pBR, pTR, vBR, vTR, level));
-          }
-
-          if ((vTR - level) * (vTL - level) < 0) {
-            potong.push(titikInterpolasi(pTR, pTL, vTR, vTL, level));
-          }
-
-          if ((vTL - level) * (vBL - level) < 0) {
-            potong.push(titikInterpolasi(pTL, pBL, vTL, vBL, level));
-          }
-
-          if (potong.length === 2) {
-            L.polyline(potong, {
-              pane: "paneIsohyetLine",
-              color: "#111827",
-              weight: 1.4,
-              opacity: 0.75,
-              interactive: false
-            }).addTo(layerIsohyetLine);
-          } else if (potong.length === 4) {
-            L.polyline([potong[0], potong[1]], {
-              pane: "paneIsohyetLine",
-              color: "#111827",
-              weight: 1.4,
-              opacity: 0.75,
-              interactive: false
-            }).addTo(layerIsohyetLine);
-
-            L.polyline([potong[2], potong[3]], {
-              pane: "paneIsohyetLine",
-              color: "#111827",
-              weight: 1.4,
-              opacity: 0.75,
-              interactive: false
-            }).addTo(layerIsohyetLine);
-          }
-        }
-      }
-    }
-
-    function hapusIsohyet() {
-      layerIsohyet.clearLayers();
-      layerIsohyetLine.clearLayers();
-      layerLabelStasiun.clearLayers();
-      nilaiRencanaStasiun = [];
-      gridIsohyet = null;
-      document.getElementById("rekapIsohyet").innerHTML = "";
-    }
-
-    function terapkanModeTampilan() {
-      const mode = document.getElementById("modeTampilan").value;
-
-      if (mode === "overlay") {
-        if (overlayHujanAktif && !map.hasLayer(overlayHujanAktif)) overlayHujanAktif.addTo(map);
-        if (overlayUploadAktif && !map.hasLayer(overlayUploadAktif)) overlayUploadAktif.addTo(map);
-
-        map.removeLayer(layerIsohyet);
-        map.removeLayer(layerIsohyetLine);
-      } else if (mode === "isohyet") {
-        if (overlayHujanAktif) map.removeLayer(overlayHujanAktif);
-        if (overlayUploadAktif) map.removeLayer(overlayUploadAktif);
-
-        if (!map.hasLayer(layerIsohyet)) layerIsohyet.addTo(map);
-        if (!map.hasLayer(layerIsohyetLine)) layerIsohyetLine.addTo(map);
-      } else {
-        if (overlayHujanAktif && !map.hasLayer(overlayHujanAktif)) overlayHujanAktif.addTo(map);
-        if (overlayUploadAktif && !map.hasLayer(overlayUploadAktif)) overlayUploadAktif.addTo(map);
-
-        if (!map.hasLayer(layerIsohyet)) layerIsohyet.addTo(map);
-        if (!map.hasLayer(layerIsohyetLine)) layerIsohyetLine.addTo(map);
-      }
-
-      toggleLabelStasiun();
-      resetHasilCek();
-    }
-
-    function latLngKePixelGambar(latlng, titik, imageWidth, imageHeight) {
-      const tl = { lat: titik.kiriAtas[0], lng: titik.kiriAtas[1] };
-      const tr = { lat: titik.kananAtas[0], lng: titik.kananAtas[1] };
-      const bl = { lat: titik.kiriBawah[0], lng: titik.kiriBawah[1] };
-
-      const aLat = tr.lat - tl.lat;
-      const aLng = tr.lng - tl.lng;
-      const bLat = bl.lat - tl.lat;
-      const bLng = bl.lng - tl.lng;
-      const cLat = latlng.lat - tl.lat;
-      const cLng = latlng.lng - tl.lng;
-
-      const det = aLat * bLng - aLng * bLat;
-
-      if (Math.abs(det) < 0.000000001) return null;
-
-      const u = (cLat * bLng - cLng * bLat) / det;
-      const v = (aLat * cLng - aLng * cLat) / det;
-
-      return {
-        u,
-        v,
-        x: Math.round(u * imageWidth),
-        y: Math.round(v * imageHeight)
-      };
-    }
-
-    function jarakWarna(rgb1, rgb2) {
-      const dr = rgb1[0] - rgb2[0];
-      const dg = rgb1[1] - rgb2[1];
-      const db = rgb1[2] - rgb2[2];
-      return Math.sqrt(dr * dr + dg * dg + db * db);
-    }
-
-    function kategoriTerdekat(rgb) {
-      let hasil = null;
-      let jarakMin = Infinity;
-
-      kategoriWarna.forEach(kategori => {
-        kategori.sampel.forEach(sample => {
-          const jarak = jarakWarna(rgb, sample);
-
-          if (jarak < jarakMin) {
-            jarakMin = jarak;
-            hasil = kategori;
-          }
-        });
-      });
-
-      return hasil;
-    }
-
-    function brightness(r, g, b) {
-      return (r + g + b) / 3;
-    }
-
-    function saturasiSederhana(r, g, b) {
-      const max = Math.max(r, g, b);
-      const min = Math.min(r, g, b);
-      return max - min;
-    }
-
-    function analisisKategoriDariPixel(x, y) {
-      if (!overlayCanvasSiap || !overlayImage) return null;
-
-      const canvas = document.getElementById("canvasOverlay");
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
-
-      const radius = 10;
-      const hitungKategori = {};
-      const warnaValid = [];
-
-      const xMin = Math.max(0, x - radius);
-      const xMax = Math.min(canvas.width - 1, x + radius);
-      const yMin = Math.max(0, y - radius);
-      const yMax = Math.min(canvas.height - 1, y + radius);
-
-      for (let py = yMin; py <= yMax; py++) {
-        for (let px = xMin; px <= xMax; px++) {
-          const data = ctx.getImageData(px, py, 1, 1).data;
-
-          const r = data[0];
-          const g = data[1];
-          const b = data[2];
-          const a = data[3];
-
-          if (a < 20) continue;
-
-          const br = brightness(r, g, b);
-          const sat = saturasiSederhana(r, g, b);
-
-          if (br < 35) continue;
-          if (br > 245 && sat < 25) continue;
-
-          const kategori = kategoriTerdekat([r, g, b]);
-
-          if (!kategori) continue;
-
-          hitungKategori[kategori.nama] = (hitungKategori[kategori.nama] || 0) + 1;
-          warnaValid.push([r, g, b]);
-        }
-      }
-
-      if (warnaValid.length === 0) return null;
-
-      let kategoriDominan = null;
-      let jumlahDominan = 0;
-
-      Object.keys(hitungKategori).forEach(nama => {
-        if (hitungKategori[nama] > jumlahDominan) {
-          jumlahDominan = hitungKategori[nama];
-          kategoriDominan = nama;
-        }
-      });
-
-      const kategoriObj = kategoriWarna.find(item => item.nama === kategoriDominan);
-
-      return {
-        kategori: kategoriDominan,
-        warnaTampil: kategoriObj ? kategoriObj.warnaTampil : "#000000"
-      };
-    }
-
-    function cekOverlayBMKG(latlng) {
-      if (!overlayAktifInfo || !overlayCanvasSiap || !overlayImage) return null;
-
-      const pixel = latLngKePixelGambar(
-        latlng,
-        overlayAktifInfo.titik,
-        overlayImage.naturalWidth,
-        overlayImage.naturalHeight
-      );
-
-      if (!pixel || pixel.u < 0 || pixel.u > 1 || pixel.v < 0 || pixel.v > 1) {
-        return null;
-      }
-
-      const hasil = analisisKategoriDariPixel(pixel.x, pixel.y);
-
-      if (!hasil) return null;
-
-      return {
-        kategori: hasil.kategori,
-        nilai: estimasiCurahHujan(hasil.kategori),
-        warna: hasil.warnaTampil
-      };
-    }
-
-    function cekIsohyetIDW(latlng) {
-      if (nilaiRencanaStasiun.length < 3) return null;
-
-      const power = Number(document.getElementById("pilihPowerIDW").value);
-      const nilai = hitungIDW(latlng.lat, latlng.lng, nilaiRencanaStasiun, power);
-      const kategori = kategoriDariNilai(nilai);
-
-      return {
-        kategori,
-        nilai: `${formatAngka(nilai, 2)} mm`,
-        warna: warnaDariNilai(nilai)
-      };
-    }
-
-    function aktifkanModeCekArea() {
-      modeCekArea = !modeCekArea;
-
-      const btn = document.getElementById("btnModeCekArea");
-
-      if (modeCekArea) {
-        btn.textContent = "Mode Cek Area Aktif";
-        btn.classList.remove("btn-warning");
-        btn.classList.add("btn-success");
-        map.getContainer().style.cursor = "crosshair";
-      } else {
-        btn.textContent = "Aktifkan Mode Cek Area";
-        btn.classList.remove("btn-success");
-        btn.classList.add("btn-warning");
-        map.getContainer().style.cursor = "";
-      }
-    }
-
-    function cekAreaDariKlik(e) {
-      if (!modeCekArea) return;
-
-      const mode = document.getElementById("modeTampilan").value;
-      let hasilHtml = "";
-      let warnaMarker = "#0f766e";
-
-      if (mode === "overlay") {
-        const hasilOverlay = cekOverlayBMKG(e.latlng);
-
-        if (!hasilOverlay) {
-          hasilHtml = "Area tidak dapat dibaca dari overlay BMKG.";
-        } else {
-          warnaMarker = hasilOverlay.warna;
-          hasilHtml = `
-            <b>Hasil Cek Area</b><br>
-            Sumber: Peta BMKG<br>
-            Kategori hujan: <b>${hasilOverlay.kategori}</b>
-            <span class="color-preview" style="background:${hasilOverlay.warna};"></span><br>
-            Estimasi curah hujan: <b>${hasilOverlay.nilai}</b><br>
-            Latitude: ${e.latlng.lat.toFixed(6)}<br>
-            Longitude: ${e.latlng.lng.toFixed(6)}<br>
-            <span class="note">Estimasi berdasarkan warna pada peta sebaran hujan BMKG.</span>
-          `;
-        }
-      } else if (mode === "isohyet") {
-        const hasilIDW = cekIsohyetIDW(e.latlng);
-
-        if (!hasilIDW) {
-          hasilHtml = "Isohyet belum dihitung. Klik Tampilkan / Perbarui Isohyet terlebih dahulu.";
-        } else {
-          warnaMarker = hasilIDW.warna;
-          hasilHtml = `
-            <b>Hasil Cek Area</b><br>
-            Sumber: Isohyet IDW<br>
-            Kala ulang: <b>${document.getElementById("pilihKalaUlang").value.replace("T", "")} tahun</b><br>
-            Estimasi hujan rencana: <b>${hasilIDW.nilai}</b><br>
-            Kategori hujan: <b>${hasilIDW.kategori}</b>
-            <span class="color-preview" style="background:${hasilIDW.warna};"></span><br>
-            Latitude: ${e.latlng.lat.toFixed(6)}<br>
-            Longitude: ${e.latlng.lng.toFixed(6)}<br>
-            <span class="note">Estimasi berdasarkan interpolasi IDW dari data stasiun.</span>
-          `;
-        }
-      } else {
-        const hasilOverlay = cekOverlayBMKG(e.latlng);
-        const hasilIDW = cekIsohyetIDW(e.latlng);
-
-        warnaMarker = hasilIDW ? hasilIDW.warna : (hasilOverlay ? hasilOverlay.warna : "#0f766e");
-
-        hasilHtml = `
-          <b>Hasil Cek Area</b><br>
-          <b>Peta BMKG</b><br>
-          ${
-            hasilOverlay
-              ? `Kategori hujan: ${hasilOverlay.kategori}<br>Estimasi curah hujan: ${hasilOverlay.nilai}<br>`
-              : `Area tidak dapat dibaca dari overlay BMKG.<br>`
-          }
-          <br>
-          <b>Isohyet IDW</b><br>
-          ${
-            hasilIDW
-              ? `Kala ulang: ${document.getElementById("pilihKalaUlang").value.replace("T", "")} tahun<br>Estimasi hujan rencana: ${hasilIDW.nilai}<br>Kategori hujan: ${hasilIDW.kategori}<br>`
-              : `Isohyet belum dihitung.<br>`
-          }
-          <br>
-          Latitude: ${e.latlng.lat.toFixed(6)}<br>
-          Longitude: ${e.latlng.lng.toFixed(6)}
-        `;
-      }
-
-      if (markerHasilCek) {
-        map.removeLayer(markerHasilCek);
-      }
-
-      const icon = L.divIcon({
-        className: "",
-        html: `<div class="marker-result" style="background:${warnaMarker};"></div>`,
-        iconSize: [18, 18],
-        iconAnchor: [9, 9]
-      });
-
-      markerHasilCek = L.marker(e.latlng, {
-        icon: icon,
-        pane: "paneHasilCek"
-      }).addTo(map);
-
-      markerHasilCek.bindPopup(hasilHtml).openPopup();
-      document.getElementById("hasilCekArea").innerHTML = hasilHtml;
-
-      modeCekArea = false;
-      document.getElementById("btnModeCekArea").textContent = "Aktifkan Mode Cek Area";
-      document.getElementById("btnModeCekArea").classList.remove("btn-success");
-      document.getElementById("btnModeCekArea").classList.add("btn-warning");
-      map.getContainer().style.cursor = "";
-    }
-
-    function resetHasilCek() {
-      if (markerHasilCek) {
-        map.removeLayer(markerHasilCek);
-        markerHasilCek = null;
-      }
-
-      document.getElementById("hasilCekArea").innerHTML = "Belum ada area yang dicek.";
-
-      modeCekArea = false;
-      document.getElementById("btnModeCekArea").textContent = "Aktifkan Mode Cek Area";
-      document.getElementById("btnModeCekArea").classList.remove("btn-success");
-      document.getElementById("btnModeCekArea").classList.add("btn-warning");
-      map.getContainer().style.cursor = "";
+    function toggleStep(stepId, iconId) {
+      const step = document.getElementById(stepId);
+      const icon = document.getElementById(iconId);
+      step.classList.toggle("collapsed");
+      icon.textContent = step.classList.contains("collapsed") ? "▸" : "▾";
     }
 
     document.getElementById("togglePanel").addEventListener("click", function () {
-      const panel = document.getElementById("panel");
+      const panel = document.getElementById("layerPanel");
       panel.classList.toggle("minimized");
+      this.textContent = panel.classList.contains("minimized") ? "›" : "−";
+      setTimeout(() => map.invalidateSize(), 300);
+    });
 
-      if (panel.classList.contains("minimized")) {
-        this.textContent = "›";
-      } else {
-        this.textContent = "−";
+    document.getElementById("toggleSegmentPanel").addEventListener("click", function () {
+      const panel = document.getElementById("segmentPanel");
+      panel.classList.toggle("minimized");
+      this.textContent = panel.classList.contains("minimized") ? "‹" : "−";
+      setTimeout(() => map.invalidateSize(), 300);
+    });
+
+    document.querySelectorAll('input[name="basemap"]').forEach(radio => {
+      radio.addEventListener("change", function() {
+        if (basemapAktif) map.removeLayer(basemapAktif);
+        if (this.value === "googleSatellite") basemapAktif = googleSatellite;
+        else if (this.value === "googleHybrid") basemapAktif = googleHybrid;
+        else if (this.value === "osmMap") basemapAktif = osmMap;
+        else if (this.value === "esriSatellite") basemapAktif = esriSatellite;
+        else basemapAktif = googleMaps;
+        basemapAktif.addTo(map);
+      });
+    });
+
+    /* LAYER DRAINASE */
+    var layerStasiunHujan = L.layerGroup().addTo(map);
+    const layerSaluranPrimer = L.layerGroup();
+    const layerSaluranSekunder = L.layerGroup();
+
+    fetch("data_stasiun_hujan.csv")
+      .then(response => response.text())
+      .then(csvText => {
+        const dataCsv = parseCsvOtomatis(csvText);
+        dataCsv.forEach(data => {
+          const latitude = angka(data.latitude);
+          const longitude = angka(data.longitude);
+          if (!isNaN(latitude) && !isNaN(longitude)) {
+            const marker = L.marker([latitude, longitude], { pane: "paneStasiun" });
+            marker.bindPopup(`<b>${data.nama_stasiun || data.stasiun || "Stasiun Hujan"}</b><br>Wilayah: ${data.wilayah || "-"}`);
+            marker.addTo(layerStasiunHujan);
+          }
+        });
+      })
+      .catch(() => console.warn("data_stasiun_hujan.csv tidak terbaca."));
+
+    const daftarSaluranMikro = [
+      { nama: "Saluran Mikro Cakung", file: "saluran_mikro_cakung.geojson" },
+      { nama: "Saluran Mikro Cipayung", file: "saluran_mikro_cipayung.geojson" },
+      { nama: "Saluran Mikro Ciracas", file: "saluran_mikro_ciracas.geojson" },
+      { nama: "Saluran Mikro Duren Sawit", file: "saluran_mikro_duren_sawit.geojson" },
+      { nama: "Saluran Mikro Jatinegara", file: "saluran_mikro_jatinegara.geojson" },
+      { nama: "Saluran Mikro Kramat Jati", file: "saluran_mikro_kramat_jati.geojson" },
+      { nama: "Saluran Mikro Makasar", file: "saluran_mikro_makasar.geojson" },
+      { nama: "Saluran Mikro Matraman", file: "saluran_mikro_matraman.geojson" },
+      { nama: "Saluran Mikro Pasar Rebo", file: "saluran_mikro_pasar_rebo.geojson" },
+      { nama: "Saluran Mikro Pulo Gadung", file: "saluran_mikro_pulo_gadung.geojson" }
+    ];
+
+    const daftarSaluranPHB = [
+      { nama: "Saluran PHB Cakung", file: "saluran_phb_cakung.geojson" },
+      { nama: "Saluran PHB Cipayung", file: "saluran_phb_cipayung.geojson" },
+      { nama: "Saluran PHB Ciracas", file: "saluran_phb_ciracas.geojson" },
+      { nama: "Saluran PHB Duren Sawit", file: "saluran_phb_duren_sawit.geojson" },
+      { nama: "Saluran PHB Jatinegara", file: "saluran_phb_jatinegara.geojson" },
+      { nama: "Saluran PHB Kramat Jati", file: "saluran_phb_kramat_jati.geojson" },
+      { nama: "Saluran PHB Makasar", file: "saluran_phb_makasar.geojson" },
+      { nama: "Saluran PHB Matraman", file: "saluran_phb_matraman.geojson" },
+      { nama: "Saluran PHB Pasar Rebo", file: "saluran_phb_pasar_rebo.geojson" },
+      { nama: "Saluran PHB Pulo Gadung", file: "saluran_phb_pulo_gadung.geojson" }
+    ];
+
+    const layerOptions = {
+      mikro: { color: "#ff00ff", weight: 1, opacity: 0.9, fillOpacity: 0, pane: "paneMikro", jenisPopup: "saluranKecil" },
+      phb: { color: "#00a6d6", weight: 2.2, opacity: 0.95, fillOpacity: 0, pane: "panePHB", jenisPopup: "saluranKecil" },
+      sekunder: { color: "#0066cc", weight: 2, opacity: 0.9, fillColor: "#0066cc", fillOpacity: 0.22, pane: "paneSekunder", jenisPopup: "saluranUtama" },
+      primer: { color: "#003b8e", weight: 2.5, opacity: 0.95, fillColor: "#003b8e", fillOpacity: 0.28, pane: "panePrimer", jenisPopup: "saluranUtama" }
+    };
+
+    function buatIdDariNama(nama) { return "cek" + nama.replace(/\s+/g, "").replace(/[^a-zA-Z0-9]/g, ""); }
+
+    function ambilNilai(properties, daftarField) {
+      for (let i = 0; i < daftarField.length; i++) {
+        const field = daftarField[i];
+        if (properties[field] !== null && properties[field] !== "" && properties[field] !== undefined) return properties[field];
       }
+      return "";
+    }
 
-      setTimeout(function () {
-        map.invalidateSize();
-      }, 300);
+    function buatPopupSaluranKecil(namaLayer, properties) {
+      const judul = ambilNilai(properties, ["TOPONIMI", "toponimi"]) || namaLayer;
+      const panjang = ambilNilai(properties, ["PANJANG", "panjang"]);
+      const lebar = ambilNilai(properties, ["LEBAR", "lebar"]);
+      const kedalaman = ambilNilai(properties, ["KEDALAMAN", "kedalaman"]);
+      let isiPopup = `<div class="popup-title">${judul}</div><table class="popup-table">`;
+      if (panjang !== "") isiPopup += `<tr><td>Panjang</td><td>${panjang}</td></tr>`;
+      if (lebar !== "") isiPopup += `<tr><td>Lebar</td><td>${lebar}</td></tr>`;
+      if (kedalaman !== "") isiPopup += `<tr><td>Kedalaman</td><td>${kedalaman}</td></tr>`;
+      isiPopup += `</table>`;
+      return isiPopup;
+    }
+
+    function buatPopupSaluranUtama(namaLayer, properties) {
+      const judul = ambilNilai(properties, ["toponimi", "TOPONIMI"]) || namaLayer;
+      const lebarMin = ambilNilai(properties, ["lebar_min", "LEBAR_MIN"]);
+      const lebarMax = ambilNilai(properties, ["lebar_max", "LEBAR_MAX"]);
+      const kedMin = ambilNilai(properties, ["ked_min", "KED_MIN"]);
+      const kedMax = ambilNilai(properties, ["ked_max", "KED_MAX"]);
+      const panjangSungai = ambilNilai(properties, ["panjang_su", "PANJANG_SU", "panjang_sungai", "PANJANG_SUNGAI"]);
+      let isiPopup = `<div class="popup-title">${judul}</div><table class="popup-table">`;
+      if (lebarMin !== "") isiPopup += `<tr><td>Lebar Minimum</td><td>${lebarMin}</td></tr>`;
+      if (lebarMax !== "") isiPopup += `<tr><td>Lebar Maksimum</td><td>${lebarMax}</td></tr>`;
+      if (kedMin !== "") isiPopup += `<tr><td>Kedalaman Minimum</td><td>${kedMin}</td></tr>`;
+      if (kedMax !== "") isiPopup += `<tr><td>Kedalaman Maksimum</td><td>${kedMax}</td></tr>`;
+      if (panjangSungai !== "") isiPopup += `<tr><td>Panjang Sungai</td><td>${panjangSungai}</td></tr>`;
+      isiPopup += `</table>`;
+      return isiPopup;
+    }
+
+    function buatPopup(namaLayer, properties, jenisPopup) {
+      if (jenisPopup === "saluranKecil") return buatPopupSaluranKecil(namaLayer, properties);
+      if (jenisPopup === "saluranUtama") return buatPopupSaluranUtama(namaLayer, properties);
+      return `<div class="popup-title">${namaLayer}</div>`;
+    }
+
+    function tambahPanah(layer, layerGroup, warna, tebal) {
+      try {
+        const decorator = L.polylineDecorator(layer, {
+          patterns: [{ offset: 25, repeat: 80, symbol: L.Symbol.arrowHead({ pixelSize: 8, polygon: false, pathOptions: { stroke: true, color: warna, weight: tebal, opacity: 0.95 } }) }]
+        });
+        decorator.addTo(layerGroup);
+      } catch (e) {}
+    }
+
+    function loadGeoJsonLayer(namaFile, namaLayer, layerGroup, options, pakaiPanah) {
+      fetch(namaFile + "?v=4")
+        .then(response => response.json())
+        .then(data => {
+          const geojsonLayer = L.geoJSON(data, {
+            pane: options.pane,
+            style: { color: options.color, weight: options.weight, opacity: options.opacity, fillColor: options.fillColor || options.color, fillOpacity: options.fillOpacity || 0 },
+            onEachFeature: function (feature, layer) {
+              const isiPopup = buatPopup(namaLayer, feature.properties || {}, options.jenisPopup);
+              layer.bindPopup(isiPopup, { maxWidth: 350 });
+              if (pakaiPanah) tambahPanah(layer, layerGroup, options.color, options.weight);
+            }
+          });
+          geojsonLayer.addTo(layerGroup);
+        })
+        .catch(() => console.warn(namaFile + " tidak terbaca."));
+    }
+
+    function buatSubLayer(containerId, daftarLayer, options, pakaiPanah) {
+      const container = document.getElementById(containerId);
+      daftarLayer.forEach(item => {
+        const checkboxId = buatIdDariNama(item.nama);
+        const layerGroup = L.layerGroup();
+        const label = document.createElement("label");
+        label.className = "layer-subitem";
+        label.innerHTML = `<input type="checkbox" id="${checkboxId}"> ${item.nama}`;
+        container.appendChild(label);
+        loadGeoJsonLayer(item.file, item.nama, layerGroup, options, pakaiPanah);
+        document.getElementById(checkboxId).addEventListener("change", function () {
+          if (this.checked) map.addLayer(layerGroup);
+          else map.removeLayer(layerGroup);
+        });
+      });
+    }
+
+    buatSubLayer("groupMikro", daftarSaluranMikro, layerOptions.mikro, true);
+    buatSubLayer("groupPHB", daftarSaluranPHB, layerOptions.phb, true);
+    loadGeoJsonLayer("saluran_drainase_primer_jaktim.geojson", "Saluran Primer", layerSaluranPrimer, layerOptions.primer, false);
+    loadGeoJsonLayer("saluran_drainase_sekunder_jaktim.geojson", "Saluran Sekunder", layerSaluranSekunder, layerOptions.sekunder, false);
+
+    document.getElementById("cekStasiunHujan").addEventListener("change", function () { this.checked ? map.addLayer(layerStasiunHujan) : map.removeLayer(layerStasiunHujan); });
+    document.getElementById("cekSaluranPrimer").addEventListener("change", function () { this.checked ? map.addLayer(layerSaluranPrimer) : map.removeLayer(layerSaluranPrimer); });
+    document.getElementById("cekSaluranSekunder").addEventListener("change", function () { this.checked ? map.addLayer(layerSaluranSekunder) : map.removeLayer(layerSaluranSekunder); });
+
+    /* SEARCH LOKASI */
+    let markerCariJalan = null;
+    let markerLokasiSaya = null;
+    let circleAkurasiLokasi = null;
+
+    const ikonLokasiSaya = L.divIcon({ className: "", html: '<div class="lokasi-saya-marker"></div>', iconSize: [22, 22], iconAnchor: [11, 11] });
+
+    function tampilkanHasilCariJalan(data) {
+      const list = document.getElementById("searchResultList");
+      if (!data || data.length === 0) {
+        list.style.display = "block";
+        list.innerHTML = `<div class="search-result-item">Tidak ada hasil ditemukan. Coba pakai kata kunci lain.</div>`;
+        return;
+      }
+      let html = "";
+      data.slice(0, 6).forEach((item, index) => {
+        const nama = item.display_name || "Lokasi tanpa nama";
+        html += `<div class="search-result-item" onclick="pilihHasilCariJalan(${index})"><div class="search-result-title">Hasil ${index + 1}</div>${nama}</div>`;
+      });
+      list.dataset.hasil = JSON.stringify(data.slice(0, 6));
+      list.style.display = "block";
+      list.innerHTML = html;
+    }
+
+    function cariJalan() {
+      const input = document.getElementById("inputCariJalan");
+      const kataKunci = input.value.trim();
+      const list = document.getElementById("searchResultList");
+      if (kataKunci === "") { alert("Masukkan nama jalan atau lokasi yang ingin dicari."); return; }
+      list.style.display = "block";
+      list.innerHTML = `<div class="search-result-item">Mencari lokasi...</div>`;
+      const query = encodeURIComponent(kataKunci + ", Jakarta, Indonesia");
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=6&addressdetails=1&q=${query}`;
+      fetch(url).then(response => response.json()).then(data => tampilkanHasilCariJalan(data)).catch(() => {
+        list.style.display = "block";
+        list.innerHTML = `<div class="search-result-item">Pencarian gagal. Coba beberapa saat lagi.</div>`;
+      });
+    }
+
+    function pilihHasilCariJalan(index) {
+      const list = document.getElementById("searchResultList");
+      const data = JSON.parse(list.dataset.hasil || "[]");
+      const item = data[index];
+      if (!item) return;
+      const lat = parseFloat(item.lat);
+      const lon = parseFloat(item.lon);
+      if (isNaN(lat) || isNaN(lon)) return;
+      if (markerCariJalan) map.removeLayer(markerCariJalan);
+      markerCariJalan = L.marker([lat, lon]).addTo(map);
+      markerCariJalan.bindPopup(`<b>Hasil Pencarian</b><br>${item.display_name}`).openPopup();
+      map.setView([lat, lon], 18);
+      list.style.display = "none";
+    }
+
+    function tampilkanLokasiSaya() {
+      if (!navigator.geolocation) { alert("Browser belum mendukung fitur lokasi."); return; }
+      navigator.geolocation.getCurrentPosition(function (posisi) {
+        const lat = posisi.coords.latitude;
+        const lon = posisi.coords.longitude;
+        const akurasi = posisi.coords.accuracy;
+        if (markerLokasiSaya) map.removeLayer(markerLokasiSaya);
+        if (circleAkurasiLokasi) map.removeLayer(circleAkurasiLokasi);
+        markerLokasiSaya = L.marker([lat, lon], { icon: ikonLokasiSaya }).addTo(map);
+        circleAkurasiLokasi = L.circle([lat, lon], { radius: akurasi, color: "#2563eb", weight: 1, fillColor: "#2563eb", fillOpacity: 0.12 }).addTo(map);
+        markerLokasiSaya.bindPopup(`<b>Lokasi Saya</b><br>Akurasi sekitar ${akurasi.toFixed(0)} meter`).openPopup();
+        map.setView([lat, lon], 18);
+      }, function () { alert("Lokasi tidak bisa diakses. Pastikan izin lokasi browser sudah aktif."); }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+    }
+
+    document.getElementById("btnCariJalan").addEventListener("click", cariJalan);
+    document.getElementById("btnLokasiSaya").addEventListener("click", tampilkanLokasiSaya);
+    document.getElementById("inputCariJalan").addEventListener("keydown", function (event) { if (event.key === "Enter") cariJalan(); });
+
+    /* DATA SEGMEN */
+    let segmenList = [];
+    let activeSegmentId = null;
+    let layerGambarUkur = new L.FeatureGroup();
+    map.addLayer(layerGambarUkur);
+
+    let modeGambar = null;
+    let handlerGambarAktif = null;
+
+    function buatSegmenDefault(nama) {
+      return {
+        id: "seg_" + Date.now() + "_" + Math.floor(Math.random() * 9999),
+        nama: nama || "Segmen Baru",
+        sisi: "Selatan",
+        warna: "#dc2626",
+        luasCA: null,
+        panjangL: null,
+        elevasiHulu: null,
+        elevasiHilir: null,
+        slopeManual: null,
+        slope: null,
+        r24: angka(document.getElementById("r24Default").value) || 205.93,
+        metodeTc: "kirpich",
+        tcMenit: null,
+        tcJam: null,
+        intensitas: null,
+        tutupan: [],
+        cGabungan: null,
+        qRencana: null,
+        jenisSaluran: "rect",
+        lebar: null,
+        tinggi: null,
+        jagaan: 0.01,
+        diameter: null,
+        tinggiAirRcp: null,
+        slopeKapasitas: null,
+        manningN: 0.015,
+        aHidrolik: null,
+        pBasah: null,
+        rHidrolik: null,
+        vSaluran: null,
+        qSaluran: null,
+        status: "Belum Lengkap",
+        caLayerId: null,
+        lineLayerId: null
+      };
+    }
+
+    function initSegmenAwal() {
+      if (segmenList.length === 0) {
+        const contoh = [
+          "Saluran I Sisi Selatan",
+          "Saluran II Sisi Selatan",
+          "Saluran III Sisi Selatan",
+          "Saluran I Sisi Utara",
+          "Saluran II Sisi Utara",
+          "Saluran III Sisi Utara"
+        ];
+        contoh.forEach((nama, i) => {
+          const s = buatSegmenDefault(nama);
+          s.sisi = nama.includes("Utara") ? "Utara" : "Selatan";
+          s.warna = i < 3 ? "#dc2626" : "#2563eb";
+          segmenList.push(s);
+        });
+        activeSegmentId = segmenList[0].id;
+      }
+    }
+
+    function getActiveSegment() { return segmenList.find(s => s.id === activeSegmentId) || null; }
+
+    function statusClass(status) {
+      if (status === "Memenuhi") return "status-memenuhi";
+      if (status === "Tidak Memenuhi") return "status-tidak";
+      return "status-belum";
+    }
+
+    function updateStatusSegmen(seg) {
+      if (!seg) return;
+      if (seg.qRencana !== null && seg.qSaluran !== null) {
+        seg.status = seg.qSaluran >= seg.qRencana ? "Memenuhi" : "Tidak Memenuhi";
+      } else {
+        seg.status = "Belum Lengkap";
+      }
+    }
+
+    function setInputNumber(id, value, digit) {
+      const el = document.getElementById(id);
+      if (value === null || value === undefined || isNaN(value)) el.value = "";
+      else el.value = digit !== undefined ? Number(value).toFixed(digit) : value;
+    }
+
+    function loadSegmenToForm() {
+      const seg = getActiveSegment();
+      const select = document.getElementById("pilihSegmenAktif");
+      select.innerHTML = "";
+      segmenList.forEach(s => {
+        const opt = document.createElement("option");
+        opt.value = s.id;
+        opt.textContent = s.nama;
+        if (s.id === activeSegmentId) opt.selected = true;
+        select.appendChild(opt);
+      });
+
+      if (!seg) return;
+      document.getElementById("namaSegmen").value = seg.nama;
+      document.getElementById("sisiSegmen").value = seg.sisi;
+      document.getElementById("warnaSegmen").value = seg.warna;
+      setInputNumber("luasCATotal", seg.luasCA, 4);
+      setInputNumber("panjangSaluran", seg.panjangL, 3);
+      setInputNumber("elevasiHulu", seg.elevasiHulu, 3);
+      setInputNumber("elevasiHilir", seg.elevasiHilir, 3);
+      setInputNumber("slopeManual", seg.slopeManual, 6);
+      setInputNumber("r24Segmen", seg.r24, 3);
+      document.getElementById("metodeTc").value = seg.metodeTc || "kirpich";
+      document.getElementById("jenisSaluranKapasitas").value = seg.jenisSaluran || "rect";
+      setInputNumber("lebarSaluran", seg.lebar, 3);
+      setInputNumber("tinggiSaluran", seg.tinggi, 3);
+      setInputNumber("jagaanSaluran", seg.jagaan, 3);
+      setInputNumber("diameterRcp", seg.diameter, 3);
+      setInputNumber("tinggiAirRcp", seg.tinggiAirRcp, 3);
+      setInputNumber("slopeKapasitas", seg.slopeKapasitas, 6);
+      setInputNumber("manningN", seg.manningN, 3);
+      updateFieldJenisSaluran();
+      renderTutupan();
+      renderHasilMini();
+      renderRekapSegmen();
+      updateSummary();
+    }
+
+    function saveFormToSegmen() {
+      const seg = getActiveSegment();
+      if (!seg) return;
+      seg.nama = document.getElementById("namaSegmen").value || seg.nama;
+      seg.sisi = document.getElementById("sisiSegmen").value;
+      seg.warna = document.getElementById("warnaSegmen").value;
+      seg.luasCA = angka(document.getElementById("luasCATotal").value);
+      if (isNaN(seg.luasCA)) seg.luasCA = null;
+      seg.panjangL = angka(document.getElementById("panjangSaluran").value);
+      if (isNaN(seg.panjangL)) seg.panjangL = null;
+      seg.elevasiHulu = angka(document.getElementById("elevasiHulu").value);
+      if (isNaN(seg.elevasiHulu)) seg.elevasiHulu = null;
+      seg.elevasiHilir = angka(document.getElementById("elevasiHilir").value);
+      if (isNaN(seg.elevasiHilir)) seg.elevasiHilir = null;
+      seg.slopeManual = angka(document.getElementById("slopeManual").value);
+      if (isNaN(seg.slopeManual)) seg.slopeManual = null;
+      seg.r24 = angka(document.getElementById("r24Segmen").value);
+      if (isNaN(seg.r24)) seg.r24 = null;
+      seg.metodeTc = document.getElementById("metodeTc").value;
+      seg.jenisSaluran = document.getElementById("jenisSaluranKapasitas").value;
+      seg.lebar = angka(document.getElementById("lebarSaluran").value);
+      if (isNaN(seg.lebar)) seg.lebar = null;
+      seg.tinggi = angka(document.getElementById("tinggiSaluran").value);
+      if (isNaN(seg.tinggi)) seg.tinggi = null;
+      seg.jagaan = angka(document.getElementById("jagaanSaluran").value);
+      if (isNaN(seg.jagaan)) seg.jagaan = 0;
+      seg.diameter = angka(document.getElementById("diameterRcp").value);
+      if (isNaN(seg.diameter)) seg.diameter = null;
+      seg.tinggiAirRcp = angka(document.getElementById("tinggiAirRcp").value);
+      if (isNaN(seg.tinggiAirRcp)) seg.tinggiAirRcp = null;
+      seg.slopeKapasitas = angka(document.getElementById("slopeKapasitas").value);
+      if (isNaN(seg.slopeKapasitas)) seg.slopeKapasitas = null;
+      seg.manningN = angka(document.getElementById("manningN").value);
+      if (isNaN(seg.manningN)) seg.manningN = 0.015;
+      hitungTurunanDasar(seg);
+      updateStatusSegmen(seg);
+      updateLayerStyleSegmen(seg);
+    }
+
+    function hitungTurunanDasar(seg) {
+      if (!seg) return;
+      if (seg.slopeManual !== null && seg.slopeManual > 0) {
+        seg.slope = seg.slopeManual;
+      } else if (seg.panjangL && seg.panjangL > 0 && seg.elevasiHulu !== null && seg.elevasiHilir !== null) {
+        const beda = seg.elevasiHulu - seg.elevasiHilir;
+        seg.slope = beda > 0 ? beda / seg.panjangL : null;
+      } else {
+        seg.slope = null;
+      }
+      hitungCGabungan(seg);
+    }
+
+    function hitungCGabungan(seg) {
+      if (!seg) return null;
+      let totalA = 0;
+      let totalCA = 0;
+      seg.tutupan.forEach(item => {
+        totalA += item.luas;
+        totalCA += item.c * item.luas;
+      });
+      seg.cGabungan = totalA > 0 ? totalCA / totalA : null;
+      return seg.cGabungan;
+    }
+
+    function hitungIntensitasSegmen(seg) {
+      hitungTurunanDasar(seg);
+      if (!seg.panjangL || seg.panjangL <= 0) return { error: "Panjang saluran belum valid." };
+      if (!seg.slope || seg.slope <= 0) return { error: "Slope belum valid. Isi elevasi atau slope manual." };
+      if (!seg.r24 || seg.r24 <= 0) return { error: "R24 belum valid." };
+      seg.tcMenit = 0.0195 * Math.pow(seg.panjangL, 0.77) * Math.pow(seg.slope, -0.385);
+      const tcJamAsli = seg.tcMenit / 60;
+      seg.tcJam = parseFloat(tcJamAsli.toFixed(3));
+      seg.intensitas = (seg.r24 / 24) * Math.pow(24 / seg.tcJam, 2 / 3);
+      return { ok: true };
+    }
+
+    function hitungQRencanaSegmen(seg) {
+      const hasilI = hitungIntensitasSegmen(seg);
+      if (hasilI.error) return hasilI;
+      hitungCGabungan(seg);
+      const totalTutupan = seg.tutupan.reduce((sum, item) => sum + item.luas, 0);
+      const luasPakai = totalTutupan > 0 ? totalTutupan : seg.luasCA;
+      if (!luasPakai || luasPakai <= 0) return { error: "Luas catchment belum valid." };
+      if (seg.cGabungan === null || seg.cGabungan <= 0) return { error: "C gabungan belum valid. Tambahkan tata guna lahan." };
+      seg.qRencana = 0.00278 * seg.cGabungan * seg.intensitas * luasPakai;
+      seg.luasCA = luasPakai;
+      updateStatusSegmen(seg);
+      return { ok: true };
+    }
+
+    function hitungKapasitasSegmen(seg) {
+      hitungTurunanDasar(seg);
+      const n = seg.manningN || 0.015;
+      const sKap = seg.slopeKapasitas && seg.slopeKapasitas > 0 ? seg.slopeKapasitas : seg.slope;
+      if (!sKap || sKap <= 0) return { error: "Slope kapasitas belum valid." };
+      if (!n || n <= 0) return { error: "Nilai n Manning belum valid." };
+      let A = null, P = null, R = null;
+      if (seg.jenisSaluran === "rcp") {
+        const D = seg.diameter;
+        if (!D || D <= 0) return { error: "Diameter RCP belum valid." };
+        const r = D / 2;
+        let y = seg.tinggiAirRcp;
+        if (!y || y <= 0 || y > D) y = D;
+        if (y >= D) {
+          A = Math.PI * D * D / 4;
+          P = Math.PI * D;
+        } else {
+          const theta = 2 * Math.acos((r - y) / r);
+          A = 0.5 * r * r * (theta - Math.sin(theta));
+          P = r * theta;
+        }
+      } else {
+        const b = seg.lebar;
+        const h = seg.tinggi;
+        const jagaan = seg.jagaan || 0;
+        if (!b || b <= 0 || !h || h <= 0) return { error: "Lebar dan tinggi saluran belum valid." };
+        const hAir = h - jagaan;
+        if (hAir <= 0) return { error: "Tinggi air tidak valid. Cek h saluran dan jagaan." };
+        A = b * hAir;
+        P = b + 2 * hAir;
+      }
+      R = A / P;
+      const V = (1 / n) * Math.pow(R, 2 / 3) * Math.pow(sKap, 0.5);
+      const Q = A * V;
+      seg.aHidrolik = A;
+      seg.pBasah = P;
+      seg.rHidrolik = R;
+      seg.vSaluran = V;
+      seg.qSaluran = Q;
+      updateStatusSegmen(seg);
+      return { ok: true };
+    }
+
+    function renderHasilMini() {
+      const seg = getActiveSegment();
+      if (!seg) return;
+      hitungTurunanDasar(seg);
+      document.getElementById("hasilSlopeMini").innerHTML = `
+        Beda elevasi: <b>${seg.elevasiHulu !== null && seg.elevasiHilir !== null ? formatAngka(seg.elevasiHulu - seg.elevasiHilir, 3) + " m" : "-"}</b><br>
+        Slope / S0: <b>${seg.slope !== null ? formatAngka(seg.slope, 6) : "-"}</b>
+      `;
+      document.getElementById("hasilIntensitasMini").innerHTML = `
+        Tc: <b>${seg.tcMenit !== null ? formatAngka(seg.tcMenit, 2) + " menit" : "-"}</b><br>
+        Tc jam: <b>${seg.tcJam !== null ? formatAngka(seg.tcJam, 3) + " jam" : "-"}</b><br>
+        Intensitas / I: <b>${seg.intensitas !== null ? formatAngka(seg.intensitas, 2) + " mm/jam" : "-"}</b>
+      `;
+      const totalA = seg.tutupan.reduce((sum, item) => sum + item.luas, 0);
+      const totalCA = seg.tutupan.reduce((sum, item) => sum + item.c * item.luas, 0);
+      document.getElementById("hasilCMini").innerHTML = `
+        Total luas tutupan: <b>${formatAngka(totalA, 4)} ha</b><br>
+        Σ(C × A): <b>${formatAngka(totalCA, 4)}</b><br>
+        C gabungan: <b>${seg.cGabungan !== null ? formatAngka(seg.cGabungan, 3) : "-"}</b>
+      `;
+      document.getElementById("hasilQMini").innerHTML = `
+        Rumus: Q = 0,00278 × Cgab × I × A<br>
+        Q Rencana: <b>${seg.qRencana !== null ? formatAngka(seg.qRencana, 3) + " m³/detik" : "-"}</b>
+      `;
+      document.getElementById("hasilKapasitasMini").innerHTML = `
+        A hidrolik: <b>${seg.aHidrolik !== null ? formatAngka(seg.aHidrolik, 3) + " m²" : "-"}</b><br>
+        P basah: <b>${seg.pBasah !== null ? formatAngka(seg.pBasah, 3) + " m" : "-"}</b><br>
+        R hidrolik: <b>${seg.rHidrolik !== null ? formatAngka(seg.rHidrolik, 3) + " m" : "-"}</b><br>
+        V: <b>${seg.vSaluran !== null ? formatAngka(seg.vSaluran, 2) + " m/detik" : "-"}</b><br>
+        Q Saluran: <b>${seg.qSaluran !== null ? formatAngka(seg.qSaluran, 3) + " m³/detik" : "-"}</b>
+      `;
+    }
+
+    function renderTutupan() {
+      const seg = getActiveSegment();
+      const tbody = document.querySelector("#tabelTutupan tbody");
+      tbody.innerHTML = "";
+      if (!seg) return;
+      hitungCGabungan(seg);
+      seg.tutupan.forEach((item, index) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${item.nama}</td><td>${formatAngka(item.c, 3)}</td><td>${formatAngka(item.luas, 4)}</td><td>${formatAngka(item.c * item.luas, 4)}</td><td><button class="hapus-mini" onclick="hapusTutupan(${index})">x</button></td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderRekapSegmen() {
+      const tbody = document.querySelector("#tabelRekapSegmen tbody");
+      tbody.innerHTML = "";
+      segmenList.forEach(seg => {
+        updateStatusSegmen(seg);
+        const tr = document.createElement("tr");
+        tr.className = "clickable-row" + (seg.id === activeSegmentId ? " active-row" : "");
+        tr.onclick = function() { activeSegmentId = seg.id; loadSegmenToForm(); };
+        tr.innerHTML = `
+          <td>${seg.nama}</td>
+          <td>${seg.panjangL !== null ? formatAngka(seg.panjangL, 0) : "-"}</td>
+          <td>${seg.slope !== null ? formatAngka(seg.slope, 4) : "-"}</td>
+          <td>${seg.tcMenit !== null ? formatAngka(seg.tcMenit, 2) : "-"}</td>
+          <td>${seg.intensitas !== null ? formatAngka(seg.intensitas, 2) : "-"}</td>
+          <td>${seg.luasCA !== null ? formatAngka(seg.luasCA, 4) : "-"}</td>
+          <td>${seg.cGabungan !== null ? formatAngka(seg.cGabungan, 3) : "-"}</td>
+          <td>${seg.qRencana !== null ? formatAngka(seg.qRencana, 3) : "-"}</td>
+          <td>${seg.qSaluran !== null ? formatAngka(seg.qSaluran, 3) : "-"}</td>
+          <td>${seg.status}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function updateSummary() {
+      const seg = getActiveSegment();
+      if (!seg) return;
+      document.getElementById("judulSegmenAktif").textContent = seg.nama;
+      const statusEl = document.getElementById("statusSegmenAktif");
+      statusEl.textContent = seg.status;
+      statusEl.className = "status-pill " + statusClass(seg.status);
+      document.getElementById("sumQRencana").textContent = seg.qRencana !== null ? formatAngka(seg.qRencana, 3) + " m³/dt" : "-";
+      document.getElementById("sumQSaluran").textContent = seg.qSaluran !== null ? formatAngka(seg.qSaluran, 3) + " m³/dt" : "-";
+      document.getElementById("sumIntensitas").textContent = seg.intensitas !== null ? formatAngka(seg.intensitas, 2) + " mm/jam" : "-";
+      document.getElementById("sumCA").textContent = seg.luasCA !== null ? formatAngka(seg.luasCA, 4) + " ha" : "-";
+    }
+
+    function refreshAll() {
+      saveFormToSegmen();
+      renderTutupan();
+      renderHasilMini();
+      renderRekapSegmen();
+      updateSummary();
+      simpanKeLocal(false);
+    }
+
+    function tambahSegmen() {
+      const nomor = segmenList.length + 1;
+      const seg = buatSegmenDefault("Saluran " + nomor);
+      segmenList.push(seg);
+      activeSegmentId = seg.id;
+      loadSegmenToForm();
+      simpanKeLocal(false);
+    }
+
+    function duplikatSegmen() {
+      const aktif = getActiveSegment();
+      if (!aktif) return;
+      const copy = JSON.parse(JSON.stringify(aktif));
+      copy.id = "seg_" + Date.now() + "_" + Math.floor(Math.random() * 9999);
+      copy.nama = aktif.nama + " Copy";
+      copy.caLayerId = null;
+      copy.lineLayerId = null;
+      segmenList.push(copy);
+      activeSegmentId = copy.id;
+      loadSegmenToForm();
+      simpanKeLocal(false);
+    }
+
+    function hapusSegmen() {
+      if (segmenList.length <= 1) { alert("Minimal harus ada satu segmen."); return; }
+      const seg = getActiveSegment();
+      if (!seg) return;
+      if (!confirm("Hapus segmen aktif?")) return;
+      hapusLayerSegmen(seg);
+      segmenList = segmenList.filter(s => s.id !== activeSegmentId);
+      activeSegmentId = segmenList[0].id;
+      loadSegmenToForm();
+      simpanKeLocal(false);
+    }
+
+    document.getElementById("btnTambahSegmen").addEventListener("click", tambahSegmen);
+    document.getElementById("btnDuplikatSegmen").addEventListener("click", duplikatSegmen);
+    document.getElementById("btnHapusSegmen").addEventListener("click", hapusSegmen);
+    document.getElementById("pilihSegmenAktif").addEventListener("change", function() { activeSegmentId = this.value; loadSegmenToForm(); });
+    document.getElementById("btnSimpanIdentitas").addEventListener("click", function() { refreshAll(); alert("Identitas segmen disimpan."); });
+
+    ["namaSegmen", "sisiSegmen", "warnaSegmen", "luasCATotal", "panjangSaluran", "elevasiHulu", "elevasiHilir", "slopeManual", "r24Segmen", "metodeTc", "lebarSaluran", "tinggiSaluran", "jagaanSaluran", "diameterRcp", "tinggiAirRcp", "slopeKapasitas", "manningN"].forEach(id => {
+      document.getElementById(id).addEventListener("input", refreshAll);
+      document.getElementById(id).addEventListener("change", refreshAll);
     });
 
-    map.on("click", cekAreaDariKlik);
+    document.getElementById("jenisSaluranKapasitas").addEventListener("change", function() { updateFieldJenisSaluran(); refreshAll(); });
 
-    muatOverlayUtama();
-    loadDataHujanRencana();
+    function updateFieldJenisSaluran() {
+      const jenis = document.getElementById("jenisSaluranKapasitas").value;
+      document.getElementById("fieldRect").style.display = jenis === "rect" ? "block" : "none";
+      document.getElementById("fieldRcp").style.display = jenis === "rcp" ? "block" : "none";
+    }
 
-    document.getElementById("modeTampilan").addEventListener("change", terapkanModeTampilan);
-    document.getElementById("pilihBasemap").addEventListener("change", gantiBasemap);
-    document.getElementById("opacityOverlayHujan").addEventListener("input", setOpacityOverlay);
-    document.getElementById("btnZoomOverlay").addEventListener("click", zoomKeOverlay);
-    document.getElementById("cekStasiunHujan").addEventListener("change", toggleStasiunHujan);
-    document.getElementById("cekNilaiStasiun").addEventListener("change", toggleLabelStasiun);
-    document.getElementById("uploadOverlay").addEventListener("change", uploadOverlaySementara);
-    document.getElementById("btnHapusUpload").addEventListener("click", hapusOverlayUpload);
-    document.getElementById("btnModeCekArea").addEventListener("click", aktifkanModeCekArea);
-    document.getElementById("btnResetHasilCek").addEventListener("click", resetHasilCek);
-    document.getElementById("btnTampilkanIsohyet").addEventListener("click", tampilkanIsohyet);
-    document.getElementById("btnHapusIsohyet").addEventListener("click", hapusIsohyet);
-
-    document.getElementById("pilihKalaUlang").addEventListener("change", function () {
-      if (nilaiRencanaStasiun.length > 0) tampilkanIsohyet();
+    document.getElementById("jenisTutupan").addEventListener("change", function() {
+      const opt = this.options[this.selectedIndex];
+      document.getElementById("nilaiCTutupan").value = opt.getAttribute("data-c") || "0.70";
     });
 
-    document.getElementById("pilihIntervalIsohyet").addEventListener("change", function () {
-      if (nilaiRencanaStasiun.length > 0) tampilkanIsohyet();
+    document.getElementById("btnTambahTutupan").addEventListener("click", function() {
+      const seg = getActiveSegment();
+      if (!seg) return;
+      const select = document.getElementById("jenisTutupan");
+      const nama = select.value;
+      const c = angka(document.getElementById("nilaiCTutupan").value);
+      const luas = angka(document.getElementById("luasTutupan").value);
+      if (isNaN(c) || c < 0 || c > 1) { alert("Nilai C harus antara 0 sampai 1."); return; }
+      if (isNaN(luas) || luas <= 0) { alert("Luas tutupan harus lebih besar dari 0."); return; }
+      seg.tutupan.push({ nama, c, luas });
+      document.getElementById("luasTutupan").value = "";
+      refreshAll();
     });
 
-    document.getElementById("pilihPowerIDW").addEventListener("change", function () {
-      if (nilaiRencanaStasiun.length > 0) tampilkanIsohyet();
+    function hapusTutupan(index) {
+      const seg = getActiveSegment();
+      if (!seg) return;
+      seg.tutupan.splice(index, 1);
+      refreshAll();
+    }
+
+    document.getElementById("btnBagiSisaCA").addEventListener("click", function() {
+      const seg = getActiveSegment();
+      if (!seg) return;
+      saveFormToSegmen();
+      const totalA = seg.tutupan.reduce((sum, item) => sum + item.luas, 0);
+      const sisa = (seg.luasCA || 0) - totalA;
+      if (sisa <= 0) { alert("Tidak ada sisa luas CA yang bisa dimasukkan."); return; }
+      document.getElementById("luasTutupan").value = sisa.toFixed(4);
     });
+
+    document.getElementById("btnHitungIntensitas").addEventListener("click", function() {
+      saveFormToSegmen();
+      const seg = getActiveSegment();
+      const hasil = hitungIntensitasSegmen(seg);
+      if (hasil.error) alert(hasil.error);
+      refreshAll();
+    });
+
+    document.getElementById("btnHitungQ").addEventListener("click", function() {
+      saveFormToSegmen();
+      const seg = getActiveSegment();
+      const hasil = hitungQRencanaSegmen(seg);
+      if (hasil.error) alert(hasil.error);
+      refreshAll();
+    });
+
+    document.getElementById("btnHitungKapasitas").addEventListener("click", function() {
+      saveFormToSegmen();
+      const seg = getActiveSegment();
+      const hasil = hitungKapasitasSegmen(seg);
+      if (hasil.error) alert(hasil.error);
+      refreshAll();
+    });
+
+    document.getElementById("btnTerapkanR24Semua").addEventListener("click", function() {
+      const r24 = angka(document.getElementById("r24Default").value);
+      if (isNaN(r24) || r24 <= 0) { alert("R24 default belum valid."); return; }
+      segmenList.forEach(seg => { seg.r24 = r24; });
+      loadSegmenToForm();
+      simpanKeLocal(false);
+    });
+
+    /* DRAW CA DAN PANJANG */
+    const drawControl = new L.Control.Draw({
+      position: "topleft",
+      draw: {
+        polygon: { allowIntersection: false, showArea: true, shapeOptions: { color: "#0f766e", weight: 2, fillOpacity: 0.25, pane: "paneCA" } },
+        polyline: { shapeOptions: { color: "#dc2626", weight: 4, pane: "paneSegmen" } },
+        rectangle: false,
+        circle: false,
+        marker: false,
+        circlemarker: false
+      },
+      edit: { featureGroup: layerGambarUkur, remove: true }
+    });
+    map.addControl(drawControl);
+
+    function mulaiGambarCA() {
+      modeGambar = "ca";
+      const drawer = new L.Draw.Polygon(map, drawControl.options.draw.polygon);
+      drawer.enable();
+      tampilkanPanelUkur(`<b>Mode Gambar Catchment Area</b><br>Gambar polygon area tangkapan untuk segmen aktif: ${getActiveSegment()?.nama || "-"}.`);
+    }
+
+    function mulaiGambarPanjang() {
+      modeGambar = "panjang";
+      const seg = getActiveSegment();
+      const drawer = new L.Draw.Polyline(map, { shapeOptions: { color: seg ? seg.warna : "#dc2626", weight: 4, pane: "paneSegmen" } });
+      drawer.enable();
+      tampilkanPanelUkur(`<b>Mode Gambar Panjang Saluran</b><br>Gambar garis dari hulu ke hilir/outlet untuk segmen aktif: ${seg?.nama || "-"}.`);
+    }
+
+    document.getElementById("btnGambarCA").addEventListener("click", mulaiGambarCA);
+    document.getElementById("btnGambarPanjang").addEventListener("click", mulaiGambarPanjang);
+    document.getElementById("btnInputCAManual").addEventListener("click", function() { document.getElementById("luasCATotal").focus(); });
+    document.getElementById("btnInputPanjangManual").addEventListener("click", function() { document.getElementById("panjangSaluran").focus(); });
+
+    map.on(L.Draw.Event.DRAWSTART, function (event) {
+      if (drawControl._toolbars && drawControl._toolbars.draw && drawControl._toolbars.draw._modes && drawControl._toolbars.draw._modes[event.layerType]) {
+        handlerGambarAktif = drawControl._toolbars.draw._modes[event.layerType].handler;
+      }
+    });
+
+    map.on(L.Draw.Event.DRAWSTOP, function () { handlerGambarAktif = null; });
+
+    map.on("contextmenu", function (event) {
+      if (handlerGambarAktif && typeof handlerGambarAktif.deleteLastVertex === "function") {
+        event.originalEvent.preventDefault();
+        handlerGambarAktif.deleteLastVertex();
+      }
+    });
+
+    map.on(L.Draw.Event.CREATED, function (event) {
+      const layer = event.layer;
+      const seg = getActiveSegment();
+      if (!seg) return;
+      layerGambarUkur.addLayer(layer);
+      if (modeGambar === "ca") {
+        hapusLayerById(seg.caLayerId);
+        seg.caLayerId = L.Util.stamp(layer);
+        layer.options.pane = "paneCA";
+        if (layer.setStyle) layer.setStyle({ color: seg.warna, fillColor: seg.warna, fillOpacity: 0.20, weight: 2 });
+        const geojson = layer.toGeoJSON();
+        const luasM2 = turf.area(geojson);
+        const luasHa = luasM2 / 10000;
+        seg.luasCA = luasHa;
+        document.getElementById("luasCATotal").value = luasHa.toFixed(4);
+        layer.bindPopup(`<b>Catchment Area</b><br>${seg.nama}<br>Luas: ${luasHa.toFixed(4)} ha`).openPopup();
+        tampilkanPanelUkur(`<b>Catchment Area berhasil dibuat</b><br>${seg.nama}<br>Luas: ${luasHa.toFixed(4)} ha<br><button onclick="tutupPanelUkur()">Tutup</button>`);
+      } else if (modeGambar === "panjang") {
+        hapusLayerById(seg.lineLayerId);
+        seg.lineLayerId = L.Util.stamp(layer);
+        if (layer.setStyle) layer.setStyle({ color: seg.warna, weight: 4, opacity: 0.95 });
+        const geojson = layer.toGeoJSON();
+        const panjangKm = turf.length(geojson, { units: "kilometers" });
+        const panjangM = panjangKm * 1000;
+        seg.panjangL = panjangM;
+        document.getElementById("panjangSaluran").value = panjangM.toFixed(2);
+        layer.bindPopup(`<b>Panjang Saluran</b><br>${seg.nama}<br>Panjang: ${panjangM.toFixed(2)} m`).openPopup();
+        tampilkanPanelUkur(`<b>Panjang saluran berhasil dibuat</b><br>${seg.nama}<br>Panjang: ${panjangM.toFixed(2)} m<br><button onclick="tutupPanelUkur()">Tutup</button>`);
+      } else {
+        prosesLayerUkurUmum(layer);
+      }
+      modeGambar = null;
+      refreshAll();
+    });
+
+    map.on(L.Draw.Event.EDITED, function (event) {
+      event.layers.eachLayer(function (layer) {
+        const id = L.Util.stamp(layer);
+        segmenList.forEach(seg => {
+          if (seg.caLayerId === id) {
+            const luasHa = turf.area(layer.toGeoJSON()) / 10000;
+            seg.luasCA = luasHa;
+          }
+          if (seg.lineLayerId === id) {
+            const panjangM = turf.length(layer.toGeoJSON(), { units: "kilometers" }) * 1000;
+            seg.panjangL = panjangM;
+          }
+        });
+      });
+      loadSegmenToForm();
+      refreshAll();
+    });
+
+    function hapusLayerById(layerId) {
+      if (!layerId) return;
+      layerGambarUkur.eachLayer(layer => {
+        if (L.Util.stamp(layer) === layerId) layerGambarUkur.removeLayer(layer);
+      });
+    }
+
+    function hapusLayerSegmen(seg) {
+      hapusLayerById(seg.caLayerId);
+      hapusLayerById(seg.lineLayerId);
+    }
+
+    function updateLayerStyleSegmen(seg) {
+      if (!seg) return;
+      layerGambarUkur.eachLayer(layer => {
+        const id = L.Util.stamp(layer);
+        if (id === seg.lineLayerId && layer.setStyle) {
+          let warna = seg.warna;
+          if (seg.status === "Memenuhi") warna = "#16a34a";
+          if (seg.status === "Tidak Memenuhi") warna = "#dc2626";
+          layer.setStyle({ color: warna, weight: 4, opacity: 0.95 });
+        }
+        if (id === seg.caLayerId && layer.setStyle) {
+          layer.setStyle({ color: seg.warna, fillColor: seg.warna, fillOpacity: 0.20, weight: 2 });
+        }
+      });
+    }
+
+    function prosesLayerUkurUmum(layer) {
+      const geojson = layer.toGeoJSON();
+      const tipe = geojson.geometry.type;
+      if (tipe === "Polygon" || tipe === "MultiPolygon") {
+        const luasM2 = turf.area(geojson);
+        tampilkanPanelUkur(`<b>Hasil Ukur Polygon</b><br>Luas: ${(luasM2 / 10000).toFixed(4)} ha<br>Luas: ${luasM2.toFixed(2)} m²<br><button onclick="tutupPanelUkur()">Tutup</button>`);
+      }
+      if (tipe === "LineString" || tipe === "MultiLineString") {
+        const panjangM = turf.length(geojson, { units: "kilometers" }) * 1000;
+        tampilkanPanelUkur(`<b>Hasil Ukur Garis</b><br>Panjang: ${panjangM.toFixed(2)} m<br><button onclick="tutupPanelUkur()">Tutup</button>`);
+      }
+    }
+
+    function tampilkanPanelUkur(html) {
+      const panel = document.getElementById("measurementPanel");
+      panel.style.display = "block";
+      panel.innerHTML = html;
+    }
+
+    function tutupPanelUkur() {
+      const panel = document.getElementById("measurementPanel");
+      panel.style.display = "none";
+      panel.innerHTML = "";
+    }
+
+    /* SIMPAN LOCAL */
+    function simpanKeLocal(showAlert) {
+      const dataSimpan = {
+        namaProyek: document.getElementById("namaProyek").value,
+        r24Default: document.getElementById("r24Default").value,
+        kalaUlangDefault: document.getElementById("kalaUlangDefault").value,
+        segmenList,
+        activeSegmentId
+      };
+      localStorage.setItem("webgisDrainaseExcelWorkflow", JSON.stringify(dataSimpan));
+      if (showAlert) alert("Data perhitungan tersimpan di browser ini.");
+    }
+
+    function loadDariLocal() {
+      const raw = localStorage.getItem("webgisDrainaseExcelWorkflow");
+      if (!raw) return false;
+      try {
+        const data = JSON.parse(raw);
+        document.getElementById("namaProyek").value = data.namaProyek || "";
+        document.getElementById("r24Default").value = data.r24Default || "205.93";
+        document.getElementById("kalaUlangDefault").value = data.kalaUlangDefault || "5";
+        segmenList = data.segmenList || [];
+        activeSegmentId = data.activeSegmentId || (segmenList[0] ? segmenList[0].id : null);
+        // Layer gambar tidak disimpan agar file tetap ringan. Luas dan panjang tetap tersimpan.
+        return segmenList.length > 0;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    document.getElementById("btnSimpanLocal").addEventListener("click", function() { saveFormToSegmen(); simpanKeLocal(true); });
+    document.getElementById("btnResetSemua").addEventListener("click", function() {
+      if (!confirm("Reset semua data segmen dan perhitungan?")) return;
+      localStorage.removeItem("webgisDrainaseExcelWorkflow");
+      layerGambarUkur.clearLayers();
+      segmenList = [];
+      activeSegmentId = null;
+      initSegmenAwal();
+      loadSegmenToForm();
+    });
+
+    document.getElementById("namaProyek").addEventListener("input", () => simpanKeLocal(false));
+    document.getElementById("r24Default").addEventListener("input", () => simpanKeLocal(false));
+    document.getElementById("kalaUlangDefault").addEventListener("change", () => simpanKeLocal(false));
+
+    window.hapusTutupan = hapusTutupan;
+    window.pilihHasilCariJalan = pilihHasilCariJalan;
+    window.tutupPanelUkur = tutupPanelUkur;
+    window.toggleGroup = toggleGroup;
+    window.toggleStep = toggleStep;
+
+    if (!loadDariLocal()) initSegmenAwal();
+    loadSegmenToForm();
   </script>
 </body>
 </html>
