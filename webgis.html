@@ -1,0 +1,2914 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>WebGIS Data Hujan</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+    }
+
+    header {
+      background: #0f766e;
+      color: white;
+      padding: 14px 20px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    header p {
+      margin: 4px 0 0;
+      font-size: 14px;
+    }
+
+    #appContainer {
+      display: flex;
+      width: 100%;
+      height: calc(100vh - 76px);
+    }
+
+    #layerPanel {
+      width: 22%;
+      min-width: 280px;
+      max-width: 420px;
+      height: 100%;
+      background: white;
+      z-index: 1000;
+      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.25);
+      font-size: 14px;
+      overflow: hidden;
+      transition: width 0.3s ease, min-width 0.3s ease;
+    }
+
+    #layerHeader {
+      background: #333;
+      color: white;
+      padding: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: bold;
+    }
+
+    #togglePanel {
+      background: transparent;
+      color: white;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    #layerContent {
+      padding: 14px;
+      overflow-y: auto;
+      height: calc(100% - 48px);
+      box-sizing: border-box;
+    }
+
+    #map {
+      flex: 1;
+      height: 100%;
+    }
+
+    #layerPanel.minimized {
+      width: 42px;
+      min-width: 42px;
+    }
+
+    #layerPanel.minimized #layerHeader {
+      height: 100%;
+      padding: 8px 4px;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    #layerPanel.minimized #layerHeader span {
+      transform: rotate(180deg);
+    }
+
+    #layerPanel.minimized #togglePanel {
+      transform: rotate(90deg);
+    }
+
+    #layerPanel.minimized #layerContent {
+      display: none;
+    }
+
+    .layer-item {
+      display: block;
+      margin-bottom: 12px;
+      cursor: pointer;
+    }
+
+    .layer-group {
+      margin-top: 12px;
+      border-top: 1px solid #ddd;
+      padding-top: 10px;
+    }
+
+    .group-title {
+      font-weight: bold;
+      cursor: pointer;
+      margin-bottom: 8px;
+      color: #333;
+      user-select: none;
+    }
+
+    .group-content {
+      padding-left: 16px;
+    }
+
+    .layer-subitem {
+      display: block;
+      margin-bottom: 10px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .popup-title {
+      font-weight: bold;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    .popup-table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 12px;
+    }
+
+    .popup-table td {
+      padding: 3px 5px;
+      border-bottom: 1px solid #eee;
+      vertical-align: top;
+    }
+
+    .popup-table td:first-child {
+      font-weight: bold;
+      color: #333;
+      white-space: nowrap;
+    }
+
+    .calculator-box {
+      font-size: 13px;
+      background: #f8fafc;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+      margin-top: 8px;
+    }
+
+    .calculator-box label {
+      display: block;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+
+    .calculator-box select,
+    .calculator-box button {
+      width: 100%;
+      padding: 7px;
+      margin-top: 4px;
+      box-sizing: border-box;
+      border-radius: 4px;
+      border: 1px solid #bbb;
+    }
+
+    .calculator-box button {
+      background: #0f766e;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .calculator-box button:hover {
+      background: #0b5f59;
+    }
+
+    .hasil-box {
+      margin-top: 12px;
+      padding: 10px;
+      background: white;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      font-size: 12px;
+    }
+
+    .hasil-box table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    .hasil-box th,
+    .hasil-box td {
+      border-bottom: 1px solid #ddd;
+      padding: 5px;
+      text-align: right;
+    }
+
+    .hasil-box th:first-child,
+    .hasil-box td:first-child {
+      text-align: left;
+    }
+
+    .statistik-kecil {
+      font-size: 11px;
+      color: #555;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+
+    /* PANEL KALKULATOR HIDROLIKA KANAN */
+    #hydraulicPanel {
+      width: 20%;
+      min-width: 300px;
+      max-width: 430px;
+      height: 100%;
+      background: white;
+      z-index: 1000;
+      box-shadow: -2px 0 8px rgba(0, 0, 0, 0.25);
+      font-size: 14px;
+      overflow: hidden;
+      transition: width 0.3s ease, min-width 0.3s ease;
+    }
+
+    #hydraulicHeader {
+      background: #0f766e;
+      color: white;
+      padding: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: bold;
+    }
+
+    #toggleHydraulicPanel {
+      background: transparent;
+      color: white;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    #hydraulicContent {
+      padding: 14px;
+      overflow-y: auto;
+      height: calc(100% - 48px);
+      box-sizing: border-box;
+    }
+
+    #hydraulicPanel.minimized {
+      width: 42px;
+      min-width: 42px;
+    }
+
+    #hydraulicPanel.minimized #hydraulicHeader {
+      height: 100%;
+      padding: 8px 4px;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    #hydraulicPanel.minimized #hydraulicHeader span {
+      transform: rotate(180deg);
+    }
+
+    #hydraulicPanel.minimized #toggleHydraulicPanel {
+      transform: rotate(90deg);
+    }
+
+    #hydraulicPanel.minimized #hydraulicContent {
+      display: none;
+    }
+
+    .hydraulic-box {
+      background: #f8fafc;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+    }
+
+    .hydraulic-box label {
+      display: block;
+      margin-bottom: 10px;
+      font-weight: bold;
+      font-size: 13px;
+    }
+
+    .hydraulic-box input,
+    .hydraulic-box select,
+    .hydraulic-box button {
+      width: 100%;
+      padding: 7px;
+      margin-top: 4px;
+      box-sizing: border-box;
+      border-radius: 4px;
+      border: 1px solid #bbb;
+    }
+
+    .hydraulic-box button {
+      background: #0f766e;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .hydraulic-box button:hover {
+      background: #0b5f59;
+    }
+
+    .rumus-box {
+      margin-top: 10px;
+      padding: 9px;
+      background: white;
+      border-left: 4px solid #0f766e;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .hasil-hidrolika {
+      margin-top: 12px;
+      padding: 10px;
+      background: white;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      font-size: 12px;
+    }
+
+    .hasil-hidrolika table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+
+    .hasil-hidrolika td {
+      border-bottom: 1px solid #ddd;
+      padding: 6px 4px;
+      vertical-align: top;
+    }
+
+    .hasil-hidrolika td:first-child {
+      font-weight: bold;
+      color: #333;
+    }
+
+    .hasil-hidrolika td:last-child {
+      text-align: right;
+    }
+
+    /* PANEL HASIL UKUR PETA */
+    #measurementPanel {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      background: white;
+      z-index: 1001;
+      min-width: 280px;
+      max-width: 420px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+      font-size: 12px;
+      display: none;
+    }
+
+    #measurementPanel b {
+      color: #0f766e;
+    }
+
+    #measurementPanel button {
+      margin-top: 8px;
+      margin-right: 5px;
+      padding: 6px 8px;
+      border: none;
+      border-radius: 4px;
+      background: #0f766e;
+      color: white;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    #measurementPanel button:hover {
+      background: #0b5f59;
+    }
+
+    /* PANEL SEARCH JALAN DAN LOKASI */
+    #searchLocationPanel {
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1002;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+      padding: 8px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      min-width: 460px;
+      max-width: 640px;
+    }
+
+    #searchLocationPanel input {
+      flex: 1;
+      padding: 8px 10px;
+      border: 1px solid #bbb;
+      border-radius: 5px;
+      font-size: 13px;
+    }
+
+    #searchLocationPanel button {
+      padding: 8px 10px;
+      border: none;
+      border-radius: 5px;
+      background: #0f766e;
+      color: white;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    #searchLocationPanel button:hover {
+      background: #0b5f59;
+    }
+
+    #searchResultList {
+      position: absolute;
+      top: 54px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1002;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+      min-width: 460px;
+      max-width: 640px;
+      max-height: 260px;
+      overflow-y: auto;
+      display: none;
+      font-size: 12px;
+    }
+
+    .search-result-item {
+      padding: 9px 11px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+      line-height: 1.4;
+    }
+
+    .search-result-item:hover {
+      background: #f1f5f9;
+    }
+
+    .search-result-title {
+      font-weight: bold;
+      color: #0f766e;
+    }
+
+    .lokasi-saya-marker {
+      width: 16px;
+      height: 16px;
+      background: #2563eb;
+      border: 3px solid white;
+      border-radius: 50%;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25), 0 2px 6px rgba(0, 0, 0, 0.35);
+    }
+
+    @media (max-width: 900px) {
+      #searchLocationPanel,
+      #searchResultList {
+        left: 52%;
+        min-width: 300px;
+        max-width: 340px;
+      }
+
+      #searchLocationPanel {
+        flex-wrap: wrap;
+      }
+
+      #searchLocationPanel input {
+        flex-basis: 100%;
+      }
+    }
+
+    /* TITIK VERTEX DRAWING DIBUAT BULAT SEPERTI GOOGLE EARTH */
+    .leaflet-div-icon.leaflet-editing-icon,
+    .leaflet-draw-guide-dash {
+      border-radius: 50% !important;
+    }
+
+    .leaflet-div-icon.leaflet-editing-icon {
+      width: 10px !important;
+      height: 10px !important;
+      margin-left: -5px !important;
+      margin-top: -5px !important;
+      background: white !important;
+      border: 2px solid #0f766e !important;
+      box-shadow: 0 0 3px rgba(0, 0, 0, 0.45) !important;
+    }
+
+    .leaflet-draw-tooltip {
+      background: rgba(0, 0, 0, 0.75) !important;
+      border-radius: 4px !important;
+      color: white !important;
+      font-size: 12px !important;
+    }
+
+    @media (max-width: 900px) {
+      #hydraulicPanel {
+        width: 45%;
+        min-width: 260px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>WebGIS Data Hujan</h1>
+    <p>Peta digital untuk visualisasi data hujan</p>
+  </header>
+
+  <div id="appContainer">
+    <div id="layerPanel">
+      <div id="layerHeader">
+        <span>Layer & Kalkulator</span>
+        <button id="togglePanel">−</button>
+      </div>
+
+      <div id="layerContent">
+        <div class="layer-group" style="border-top: none; margin-top: 0; padding-top: 0;">
+          <div class="group-title" onclick="toggleGroup('groupLayerPeta', 'iconLayerPeta')">
+            <span id="iconLayerPeta">▾</span> Layer Peta
+          </div>
+
+          <div class="group-content" id="groupLayerPeta" style="padding-left: 0;">
+            <label class="layer-item">
+              <input type="checkbox" id="cekStasiunHujan" checked>
+              Stasiun Hujan
+            </label>
+
+            <label class="layer-item">
+              <input type="checkbox" id="cekSaluranPrimer">
+              Saluran Primer
+            </label>
+
+            <label class="layer-item">
+              <input type="checkbox" id="cekSaluranSekunder">
+              Saluran Sekunder
+            </label>
+
+            <div class="layer-group">
+              <div class="group-title" onclick="toggleGroup('groupPHB', 'iconPHB')">
+                <span id="iconPHB">▾</span> Saluran PHB
+              </div>
+              <div class="group-content" id="groupPHB"></div>
+            </div>
+
+            <div class="layer-group">
+              <div class="group-title" onclick="toggleGroup('groupMikro', 'iconMikro')">
+                <span id="iconMikro">▾</span> Saluran Mikro
+              </div>
+              <div class="group-content" id="groupMikro"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="layer-group">
+          <div class="group-title" onclick="toggleGroup('groupKalkulatorHujan', 'iconKalkulatorHujan')">
+            <span id="iconKalkulatorHujan">▾</span> Kalkulator Hujan Rencana
+          </div>
+
+          <div class="group-content" id="groupKalkulatorHujan" style="padding-left: 0;">
+            <div class="calculator-box">
+              <label>
+                Pilih Stasiun
+                <select id="pilihStasiun">
+                  <option value="stasiun_meteorologi_halim_perdana_kusuma">Stasiun Meteorologi Halim Perdana Kusuma</option>
+                  <option value="stasiun_meteorologi_kemayoran">Stasiun Meteorologi Kemayoran</option>
+                  <option value="stasiun_meteorologi_bogor">Stasiun Meteorologi Bogor</option>
+                </select>
+              </label>
+
+              <label>
+                Pilih Metode
+                <select id="pilihMetode">
+                  <option value="normal">Normal</option>
+                  <option value="lognormal">Log Normal</option>
+                  <option value="gumbel">Gumbel</option>
+                  <option value="logpearson3">Log Pearson Tipe III</option>
+                </select>
+              </label>
+
+              <label>
+                Taraf Signifikansi Chi-Square
+                <select id="pilihAlphaChiSquare">
+                  <option value="0.05">5%</option>
+                  <option value="0.01">1%</option>
+                  <option value="0.001">0.1%</option>
+                </select>
+              </label>
+
+              <button id="btnHitungHujan">Hitung Hujan Rencana</button>
+
+              <div id="hasilHujanRencana"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="map"></div>
+
+    <div id="hydraulicPanel">
+      <div id="hydraulicHeader">
+        <span>Kalkulator Hidrolika</span>
+        <button id="toggleHydraulicPanel">−</button>
+      </div>
+
+      <div id="hydraulicContent">
+        <div class="hydraulic-box">
+          <label>
+            Pilih Perhitungan
+            <select id="pilihPerhitunganHidrolika">
+              <option value="intensitas">Perhitungan Intensitas Hujan</option>
+              <option value="q_rasional">Q Rancangan Metode Rasional</option>
+            </select>
+          </label>
+
+          <label>
+            Metode Waktu Konsentrasi (tc)
+            <select id="pilihMetodeTc">
+              <option value="kirpich">Kirpich</option>
+              <option value="faa">FAA</option>
+            </select>
+          </label>
+
+          <div id="fieldFaa" style="display: none;">
+            <label>
+              Koefisien Limpasan / C untuk FAA
+              <input type="number" id="nilaiCFaa" placeholder="Contoh: 0.70" step="0.001" min="0" max="1">
+            </label>
+
+            <div class="statistik-kecil" style="margin-bottom: 10px;">
+              Rumus FAA memakai C antara 0.30 - 0.90 sesuai kondisi permukaan. L pada rumus dikonversi otomatis dari meter ke feet.
+            </div>
+          </div>
+
+          <label>
+            Elevasi Hulu (m)
+            <input type="number" id="elevasiHulu" placeholder="Contoh: 33.45" step="0.001">
+          </label>
+
+          <label>
+            Elevasi Hilir (m)
+            <input type="number" id="elevasiHilir" placeholder="Contoh: 31.79" step="0.001">
+          </label>
+
+          <label>
+            Panjang Saluran / L (m)
+            <input type="number" id="panjangSaluran" placeholder="Contoh: 281.66" step="0.001">
+          </label>
+
+          <label>
+            Hujan Harian Maksimum / R24 (mm)
+            <input type="number" id="r24Hujan" placeholder="Contoh: 205.93" step="0.001">
+          </label>
+
+          <button id="btnHitungIntensitas" type="button" style="margin-bottom: 10px;">Hitung Intensitas Hujan</button>
+
+          <div id="qRasionalFields" style="display: none;">
+            <label>
+              Intensitas Hujan / I (mm/jam)
+              <input type="number" id="intensitasQ" placeholder="Contoh: 223.64" step="0.001">
+            </label>
+
+            <div class="rumus-box">
+              <b>Tahap 2: Tutupan Lahan / Koefisien C</b><br>
+              Setelah I terisi, pilih tata guna lahan, isi nilai C, isi luas area dalam hektar, lalu klik tambah.
+            </div>
+
+            <label>
+              Tata Guna Lahan
+              <select id="pilihTutupanLahan">
+                <option value="" data-min="" data-max="">Pilih tata guna lahan</option>
+                <option value="Kawasan Kota" data-min="0.70" data-max="0.95">Bisnis - Kawasan Kota (0.70 - 0.95)</option>
+                <option value="Kawasan Pinggiran" data-min="0.50" data-max="0.70">Bisnis - Kawasan Pinggiran (0.50 - 0.70)</option>
+                <option value="Kawasan Keluarga Tunggal" data-min="0.30" data-max="0.50">Perumahan - Keluarga Tunggal (0.30 - 0.50)</option>
+                <option value="Multi Satuan Terpisah" data-min="0.40" data-max="0.60">Perumahan - Multi Satuan Terpisah (0.40 - 0.60)</option>
+                <option value="Multi Satuan Berdempetan" data-min="0.60" data-max="0.75">Perumahan - Multi Satuan Berdempetan/Rapat (0.60 - 0.75)</option>
+                <option value="Pemukiman Pinggiran Kota" data-min="0.25" data-max="0.40">Kawasan Pemukiman Pinggiran Kota (0.25 - 0.40)</option>
+                <option value="Rumah Susun / Apartemen" data-min="0.50" data-max="0.70">Rumah Susun / Apartemen (0.50 - 0.70)</option>
+                <option value="Perindustrian" data-min="0.50" data-max="0.90">Perindustrian Ringan - Berat (0.50 - 0.90)</option>
+                <option value="Taman dan Kuburan" data-min="0.10" data-max="0.25">Taman-taman dan Kuburan (0.10 - 0.25)</option>
+                <option value="Lapangan Bermain" data-min="0.20" data-max="0.35">Lapangan Bermain (0.20 - 0.35)</option>
+                <option value="Halaman Kereta Api" data-min="0.20" data-max="0.40">Kawasan Halaman Kereta Api (0.20 - 0.40)</option>
+                <option value="Belum Dimanfaatkan" data-min="0.10" data-max="0.30">Kawasan Belum Dimanfaatkan (0.10 - 0.30)</option>
+                <option value="Jalan Beraspal" data-min="0.70" data-max="0.95">Jalan - Beraspal (0.70 - 0.95)</option>
+                <option value="Jalan Beton" data-min="0.80" data-max="0.95">Jalan - Beton (0.80 - 0.95)</option>
+                <option value="Paving Block / Con Block" data-min="0.70" data-max="0.85">Jalan - Batu Bata / Paving Block / Con Block (0.70 - 0.85)</option>
+                <option value="Jalan Raya dan Trotoar" data-min="0.70" data-max="0.85">Jalan Raya dan Trotoar (0.70 - 0.85)</option>
+                <option value="Manual / Lainnya" data-min="0" data-max="1">Manual / Lainnya (0.00 - 1.00)</option>
+              </select>
+            </label>
+
+            <label>
+              Nilai Koefisien Limpasan / C
+              <input type="number" id="nilaiCManual" placeholder="Pilih tata guna lahan atau isi manual, contoh: 0.70" step="0.001" min="0" max="1">
+            </label>
+
+            <div id="infoRentangC" class="statistik-kecil" style="margin-bottom: 10px;">
+              Pilih tata guna lahan untuk melihat rentang nilai C, lalu isi nilai C manual sesuai kondisi lapangan.
+            </div>
+
+            <label>
+              Luas Area Tutupan Lahan (ha)
+              <input type="number" id="luasTutupanLahan" placeholder="Contoh: 0.25" step="0.001">
+            </label>
+
+            <button type="button" id="btnTambahTutupanLahan">Tambah Tutupan Lahan</button>
+
+            <div id="daftarTutupanLahan" class="hasil-hidrolika" style="display: none;"></div>
+          </div>
+
+          <button id="btnHitungHidrolika">Hitung Q Rencana</button>
+
+          <div class="rumus-box">
+            <b>Rumus yang digunakan:</b><br>
+            S = (Elevasi Hulu − Elevasi Hilir) / L<br>
+            tc Kirpich = 0,0195 × L<sup>0,77</sup> × S<sup>-0,385</sup><br>
+            tc FAA = 1,8 × (1,1 − C) × L<sup>0,5</sup> / S<sup>0,33</sup><br>
+            I = R24 / 24 × (24 / t)<sup>2/3</sup><br><br>
+
+            <b>Keterangan:</b><br>
+            L Kirpich = panjang saluran dalam meter<br>
+            L FAA = panjang saluran dalam feet, dikonversi otomatis dari meter<br>
+            S = kemiringan saluran m/m atau ft/ft<br>
+            C FAA = koefisien limpasan permukaan<br>
+            tc = waktu konsentrasi dalam menit<br>
+            t = waktu konsentrasi dalam jam<br>
+            Q = 0,00278 × C × I × A
+          </div>
+
+          <div id="hasilHidrolika"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="searchLocationPanel">
+      <input type="text" id="inputCariJalan" placeholder="Cari jalan/lokasi, contoh: Jalan Bojong Indah, Jakarta Timur">
+      <button type="button" id="btnCariJalan">Cari</button>
+      <button type="button" id="btnLokasiSaya">Lokasi Saya</button>
+    </div>
+
+    <div id="searchResultList"></div>
+
+    <div id="measurementPanel"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+
+  <script>
+    var map = L.map("map").setView([-6.225, 106.900], 11);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+
+    map.createPane("paneMikro");
+    map.createPane("panePHB");
+    map.createPane("paneSekunder");
+    map.createPane("panePrimer");
+    map.createPane("paneStasiun");
+
+    map.getPane("paneMikro").style.zIndex = 410;
+    map.getPane("panePHB").style.zIndex = 420;
+    map.getPane("paneSekunder").style.zIndex = 430;
+    map.getPane("panePrimer").style.zIndex = 440;
+    map.getPane("paneStasiun").style.zIndex = 450;
+
+    function parseCsvOtomatis(csvText) {
+      const rows = csvText.trim().split(/\r?\n/);
+      const firstLine = rows[0];
+      const delimiter = firstLine.includes(";") ? ";" : ",";
+      const headers = firstLine.split(delimiter).map(h => h.trim());
+
+      return rows.slice(1).map(row => {
+        const values = row.split(delimiter);
+        const obj = {};
+
+        headers.forEach((header, index) => {
+          obj[header] = values[index] ? values[index].trim() : "";
+        });
+
+        return obj;
+      });
+    }
+
+    function angka(value) {
+      return parseFloat(String(value).replace(",", "."));
+    }
+
+    function rataRata(data) {
+      return data.reduce((sum, x) => sum + x, 0) / data.length;
+    }
+
+    function standarDeviasi(data) {
+      const mean = rataRata(data);
+      const jumlahKuadrat = data.reduce((sum, x) => sum + Math.pow(x - mean, 2), 0);
+      return Math.sqrt(jumlahKuadrat / (data.length - 1));
+    }
+
+    function skewness(data) {
+      const n = data.length;
+      const mean = rataRata(data);
+      const sd = standarDeviasi(data);
+
+      const jumlahPangkatTiga = data.reduce((sum, x) => {
+        return sum + Math.pow((x - mean) / sd, 3);
+      }, 0);
+
+      return (n / ((n - 1) * (n - 2))) * jumlahPangkatTiga;
+    }
+
+    function inverseNormal(p) {
+      const a1 = -39.6968302866538;
+      const a2 = 220.946098424521;
+      const a3 = -275.928510446969;
+      const a4 = 138.357751867269;
+      const a5 = -30.6647980661472;
+      const a6 = 2.50662827745924;
+
+      const b1 = -54.4760987982241;
+      const b2 = 161.585836858041;
+      const b3 = -155.698979859887;
+      const b4 = 66.8013118877197;
+      const b5 = -13.2806815528857;
+
+      const c1 = -0.00778489400243029;
+      const c2 = -0.322396458041136;
+      const c3 = -2.40075827716184;
+      const c4 = -2.54973253934373;
+      const c5 = 4.37466414146497;
+      const c6 = 2.93816398269878;
+
+      const d1 = 0.00778469570904146;
+      const d2 = 0.32246712907004;
+      const d3 = 2.445134137143;
+      const d4 = 3.75440866190742;
+
+      const pLow = 0.02425;
+      const pHigh = 1 - pLow;
+
+      let q;
+      let r;
+
+      if (p < pLow) {
+        q = Math.sqrt(-2 * Math.log(p));
+        return (((((c1 * q + c2) * q + c3) * q + c4) * q + c5) * q + c6) /
+          ((((d1 * q + d2) * q + d3) * q + d4) * q + 1);
+      }
+
+      if (p <= pHigh) {
+        q = p - 0.5;
+        r = q * q;
+        return (((((a1 * r + a2) * r + a3) * r + a4) * r + a5) * r + a6) * q /
+          (((((b1 * r + b2) * r + b3) * r + b4) * r + b5) * r + 1);
+      }
+
+      q = Math.sqrt(-2 * Math.log(1 - p));
+      return -(((((c1 * q + c2) * q + c3) * q + c4) * q + c5) * q + c6) /
+        ((((d1 * q + d2) * q + d3) * q + d4) * q + 1);
+    }
+
+    function erf(x) {
+      const sign = x >= 0 ? 1 : -1;
+      x = Math.abs(x);
+
+      const a1 = 0.254829592;
+      const a2 = -0.284496736;
+      const a3 = 1.421413741;
+      const a4 = -1.453152027;
+      const a5 = 1.061405429;
+      const p = 0.3275911;
+
+      const t = 1 / (1 + p * x);
+      const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+
+      return sign * y;
+    }
+
+    function normalCDF(z) {
+      return 0.5 * (1 + erf(z / Math.sqrt(2)));
+    }
+
+    function logGamma(z) {
+      const coefficients = [
+        76.18009172947146,
+        -86.50532032941677,
+        24.01409824083091,
+        -1.231739572450155,
+        0.001208650973866179,
+        -0.000005395239384953
+      ];
+
+      let x = z;
+      let y = z;
+      let tmp = x + 5.5;
+
+      tmp -= (x + 0.5) * Math.log(tmp);
+
+      let ser = 1.000000000190015;
+
+      for (let j = 0; j < coefficients.length; j++) {
+        y += 1;
+        ser += coefficients[j] / y;
+      }
+
+      return Math.log(2.5066282746310005 * ser / x) - tmp;
+    }
+
+    function gammaLowerRegularized(a, x) {
+      if (x < 0 || a <= 0) {
+        return NaN;
+      }
+
+      if (x === 0) {
+        return 0;
+      }
+
+      if (x < a + 1) {
+        let ap = a;
+        let sum = 1 / a;
+        let del = sum;
+
+        for (let n = 1; n <= 100; n++) {
+          ap += 1;
+          del *= x / ap;
+          sum += del;
+
+          if (Math.abs(del) < Math.abs(sum) * 1e-12) {
+            return sum * Math.exp(-x + a * Math.log(x) - logGamma(a));
+          }
+        }
+      } else {
+        let b = x + 1 - a;
+        let c = 1 / 1e-30;
+        let d = 1 / b;
+        let h = d;
+
+        for (let i = 1; i <= 100; i++) {
+          const an = -i * (i - a);
+          b += 2;
+          d = an * d + b;
+
+          if (Math.abs(d) < 1e-30) {
+            d = 1e-30;
+          }
+
+          c = b + an / c;
+
+          if (Math.abs(c) < 1e-30) {
+            c = 1e-30;
+          }
+
+          d = 1 / d;
+
+          const del = d * c;
+          h *= del;
+
+          if (Math.abs(del - 1) < 1e-12) {
+            return 1 - Math.exp(-x + a * Math.log(x) - logGamma(a)) * h;
+          }
+        }
+      }
+
+      return NaN;
+    }
+
+    function pearson3CDF(x, mean, sd, cs) {
+      if (Math.abs(cs) < 0.000001) {
+        return normalCDF((x - mean) / sd);
+      }
+
+      const alpha = 4 / (cs * cs);
+      const beta = sd * cs / 2;
+      const x0 = mean - (2 * sd / cs);
+
+      if (beta > 0) {
+        const y = (x - x0) / beta;
+
+        if (y <= 0) {
+          return 0;
+        }
+
+        return gammaLowerRegularized(alpha, y);
+      } else {
+        const y = (x0 - x) / Math.abs(beta);
+
+        if (y <= 0) {
+          return 1;
+        }
+
+        return 1 - gammaLowerRegularized(alpha, y);
+      }
+    }
+
+    function chiSquareCritical(df, alpha) {
+      const tabel = {
+        "0.05": {
+          1: 3.841,
+          2: 5.991,
+          3: 7.815,
+          4: 9.488,
+          5: 11.070,
+          6: 12.592,
+          7: 14.067,
+          8: 15.507,
+          9: 16.919,
+          10: 18.307
+        },
+        "0.01": {
+          1: 6.635,
+          2: 9.210,
+          3: 11.345,
+          4: 13.277,
+          5: 15.086,
+          6: 16.812,
+          7: 18.475,
+          8: 20.090,
+          9: 21.666,
+          10: 23.209
+        },
+        "0.001": {
+          1: 10.828,
+          2: 13.816,
+          3: 16.266,
+          4: 18.467,
+          5: 20.515,
+          6: 22.458,
+          7: 24.322,
+          8: 26.124,
+          9: 27.877,
+          10: 29.588
+        }
+      };
+
+      if (!tabel[alpha]) {
+        return null;
+      }
+
+      return tabel[alpha][df] || null;
+    }
+
+    function labelAlpha(alpha) {
+      if (alpha === "0.05") return "5%";
+      if (alpha === "0.01") return "1%";
+      if (alpha === "0.001") return "0.1%";
+      return alpha;
+    }
+
+    var layerStasiunHujan = L.layerGroup().addTo(map);
+
+    fetch("data_stasiun_hujan.csv")
+      .then(response => response.text())
+      .then(csvText => {
+        const dataCsv = parseCsvOtomatis(csvText);
+
+        dataCsv.forEach(data => {
+          const latitude = angka(data.latitude);
+          const longitude = angka(data.longitude);
+
+          if (!isNaN(latitude) && !isNaN(longitude)) {
+            const marker = L.marker([latitude, longitude], {
+              pane: "paneStasiun"
+            });
+
+            marker.bindPopup(`
+              <b>${data.nama_stasiun}</b><br>
+              Wilayah: ${data.wilayah}
+            `);
+
+            marker.addTo(layerStasiunHujan);
+          }
+        });
+      });
+
+    const daftarSaluranMikro = [
+      { nama: "Saluran Mikro Cakung", file: "saluran_mikro_cakung.geojson" },
+      { nama: "Saluran Mikro Cipayung", file: "saluran_mikro_cipayung.geojson" },
+      { nama: "Saluran Mikro Ciracas", file: "saluran_mikro_ciracas.geojson" },
+      { nama: "Saluran Mikro Duren Sawit", file: "saluran_mikro_duren_sawit.geojson" },
+      { nama: "Saluran Mikro Jatinegara", file: "saluran_mikro_jatinegara.geojson" },
+      { nama: "Saluran Mikro Kramat Jati", file: "saluran_mikro_kramat_jati.geojson" },
+      { nama: "Saluran Mikro Makasar", file: "saluran_mikro_makasar.geojson" },
+      { nama: "Saluran Mikro Matraman", file: "saluran_mikro_matraman.geojson" },
+      { nama: "Saluran Mikro Pasar Rebo", file: "saluran_mikro_pasar_rebo.geojson" },
+      { nama: "Saluran Mikro Pulo Gadung", file: "saluran_mikro_pulo_gadung.geojson" }
+    ];
+
+    const daftarSaluranPHB = [
+      { nama: "Saluran PHB Cakung", file: "saluran_phb_cakung.geojson" },
+      { nama: "Saluran PHB Cipayung", file: "saluran_phb_cipayung.geojson" },
+      { nama: "Saluran PHB Ciracas", file: "saluran_phb_ciracas.geojson" },
+      { nama: "Saluran PHB Duren Sawit", file: "saluran_phb_duren_sawit.geojson" },
+      { nama: "Saluran PHB Jatinegara", file: "saluran_phb_jatinegara.geojson" },
+      { nama: "Saluran PHB Kramat Jati", file: "saluran_phb_kramat_jati.geojson" },
+      { nama: "Saluran PHB Makasar", file: "saluran_phb_makasar.geojson" },
+      { nama: "Saluran PHB Matraman", file: "saluran_phb_matraman.geojson" },
+      { nama: "Saluran PHB Pasar Rebo", file: "saluran_phb_pasar_rebo.geojson" },
+      { nama: "Saluran PHB Pulo Gadung", file: "saluran_phb_pulo_gadung.geojson" }
+    ];
+
+    const layerSaluranPrimer = L.layerGroup();
+    const layerSaluranSekunder = L.layerGroup();
+
+    const layerOptions = {
+      mikro: {
+        color: "#ff00ff",
+        weight: 1,
+        opacity: 0.9,
+        fillOpacity: 0,
+        pane: "paneMikro",
+        jenisPopup: "saluranKecil"
+      },
+      phb: {
+        color: "#00a6d6",
+        weight: 1.5,
+        opacity: 0.95,
+        fillOpacity: 0,
+        pane: "panePHB",
+        jenisPopup: "saluranKecil"
+      },
+      sekunder: {
+        color: "#0066cc",
+        weight: 1.5,
+        opacity: 0.9,
+        fillColor: "#0066cc",
+        fillOpacity: 0.25,
+        pane: "paneSekunder",
+        jenisPopup: "saluranUtama"
+      },
+      primer: {
+        color: "#003b8e",
+        weight: 1.8,
+        opacity: 0.95,
+        fillColor: "#003b8e",
+        fillOpacity: 0.3,
+        pane: "panePrimer",
+        jenisPopup: "saluranUtama"
+      }
+    };
+
+    function buatIdDariNama(nama) {
+      return "cek" + nama.replace(/\s+/g, "").replace(/[^a-zA-Z0-9]/g, "");
+    }
+
+    function ambilNilai(properties, daftarField) {
+      for (let i = 0; i < daftarField.length; i++) {
+        const field = daftarField[i];
+
+        if (
+          properties[field] !== null &&
+          properties[field] !== "" &&
+          properties[field] !== undefined
+        ) {
+          return properties[field];
+        }
+      }
+
+      return "";
+    }
+
+    function buatPopupSaluranKecil(namaLayer, properties) {
+      const judul = ambilNilai(properties, ["TOPONIMI", "toponimi"]) || namaLayer;
+      const panjang = ambilNilai(properties, ["PANJANG", "panjang"]);
+      const lebar = ambilNilai(properties, ["LEBAR", "lebar"]);
+      const kedalaman = ambilNilai(properties, ["KEDALAMAN", "kedalaman"]);
+
+      let isiPopup = `<div class="popup-title">${judul}</div>`;
+      isiPopup += `<table class="popup-table">`;
+
+      if (panjang !== "") isiPopup += `<tr><td>Panjang</td><td>${panjang}</td></tr>`;
+      if (lebar !== "") isiPopup += `<tr><td>Lebar</td><td>${lebar}</td></tr>`;
+      if (kedalaman !== "") isiPopup += `<tr><td>Kedalaman</td><td>${kedalaman}</td></tr>`;
+
+      isiPopup += `</table>`;
+      return isiPopup;
+    }
+
+    function buatPopupSaluranUtama(namaLayer, properties) {
+      const judul = ambilNilai(properties, ["toponimi", "TOPONIMI"]) || namaLayer;
+      const lebarMin = ambilNilai(properties, ["lebar_min", "LEBAR_MIN"]);
+      const lebarMax = ambilNilai(properties, ["lebar_max", "LEBAR_MAX"]);
+      const kedMin = ambilNilai(properties, ["ked_min", "KED_MIN"]);
+      const kedMax = ambilNilai(properties, ["ked_max", "KED_MAX"]);
+      const panjangSungai = ambilNilai(properties, ["panjang_su", "PANJANG_SU", "panjang_sungai", "PANJANG_SUNGAI"]);
+
+      let isiPopup = `<div class="popup-title">${judul}</div>`;
+      isiPopup += `<table class="popup-table">`;
+
+      if (lebarMin !== "") isiPopup += `<tr><td>Lebar Minimum</td><td>${lebarMin}</td></tr>`;
+      if (lebarMax !== "") isiPopup += `<tr><td>Lebar Maksimum</td><td>${lebarMax}</td></tr>`;
+      if (kedMin !== "") isiPopup += `<tr><td>Kedalaman Minimum</td><td>${kedMin}</td></tr>`;
+      if (kedMax !== "") isiPopup += `<tr><td>Kedalaman Maksimum</td><td>${kedMax}</td></tr>`;
+      if (panjangSungai !== "") isiPopup += `<tr><td>Panjang Sungai</td><td>${panjangSungai}</td></tr>`;
+
+      isiPopup += `</table>`;
+      return isiPopup;
+    }
+
+    function buatPopup(namaLayer, properties, jenisPopup) {
+      if (jenisPopup === "saluranKecil") return buatPopupSaluranKecil(namaLayer, properties);
+      if (jenisPopup === "saluranUtama") return buatPopupSaluranUtama(namaLayer, properties);
+      return `<div class="popup-title">${namaLayer}</div>`;
+    }
+
+    function tambahPanah(layer, layerGroup, warna, tebal) {
+      const decorator = L.polylineDecorator(layer, {
+        patterns: [
+          {
+            offset: 25,
+            repeat: 80,
+            symbol: L.Symbol.arrowHead({
+              pixelSize: 8,
+              polygon: false,
+              pathOptions: {
+                stroke: true,
+                color: warna,
+                weight: tebal,
+                opacity: 0.95
+              }
+            })
+          }
+        ]
+      });
+
+      decorator.addTo(layerGroup);
+    }
+
+    function loadGeoJsonLayer(namaFile, namaLayer, layerGroup, options, pakaiPanah) {
+      fetch(namaFile + "?v=3")
+        .then(response => response.json())
+        .then(data => {
+          const geojsonLayer = L.geoJSON(data, {
+            pane: options.pane,
+            style: {
+              color: options.color,
+              weight: options.weight,
+              opacity: options.opacity,
+              fillColor: options.fillColor || options.color,
+              fillOpacity: options.fillOpacity || 0
+            },
+            onEachFeature: function (feature, layer) {
+              const isiPopup = buatPopup(namaLayer, feature.properties, options.jenisPopup);
+              layer.bindPopup(isiPopup, { maxWidth: 350 });
+
+              if (pakaiPanah) {
+                tambahPanah(layer, layerGroup, options.color, options.weight);
+              }
+            }
+          });
+
+          geojsonLayer.addTo(layerGroup);
+        });
+    }
+
+    function buatSubLayer(containerId, daftarLayer, options, pakaiPanah) {
+      const container = document.getElementById(containerId);
+
+      daftarLayer.forEach(item => {
+        const checkboxId = buatIdDariNama(item.nama);
+        const layerGroup = L.layerGroup();
+
+        const label = document.createElement("label");
+        label.className = "layer-subitem";
+        label.innerHTML = `
+          <input type="checkbox" id="${checkboxId}">
+          ${item.nama}
+        `;
+
+        container.appendChild(label);
+        loadGeoJsonLayer(item.file, item.nama, layerGroup, options, pakaiPanah);
+
+        document.getElementById(checkboxId).addEventListener("change", function () {
+          if (this.checked) {
+            map.addLayer(layerGroup);
+          } else {
+            map.removeLayer(layerGroup);
+          }
+        });
+      });
+    }
+
+    buatSubLayer("groupMikro", daftarSaluranMikro, layerOptions.mikro, true);
+    buatSubLayer("groupPHB", daftarSaluranPHB, layerOptions.phb, true);
+
+    loadGeoJsonLayer("saluran_drainase_primer_jaktim.geojson", "Saluran Primer", layerSaluranPrimer, layerOptions.primer, false);
+    loadGeoJsonLayer("saluran_drainase_sekunder_jaktim.geojson", "Saluran Sekunder", layerSaluranSekunder, layerOptions.sekunder, false);
+
+    document.getElementById("cekStasiunHujan").addEventListener("change", function () {
+      if (this.checked) map.addLayer(layerStasiunHujan);
+      else map.removeLayer(layerStasiunHujan);
+    });
+
+    document.getElementById("cekSaluranPrimer").addEventListener("change", function () {
+      if (this.checked) map.addLayer(layerSaluranPrimer);
+      else map.removeLayer(layerSaluranPrimer);
+    });
+
+    document.getElementById("cekSaluranSekunder").addEventListener("change", function () {
+      if (this.checked) map.addLayer(layerSaluranSekunder);
+      else map.removeLayer(layerSaluranSekunder);
+    });
+
+    let dataHujanBMKG = [];
+    let tabelGumbel = [];
+    let tabelPearson3 = [];
+
+    fetch("data_hujan_bmkg_3stasiun.csv?v=3")
+      .then(response => response.text())
+      .then(csvText => {
+        dataHujanBMKG = parseCsvOtomatis(csvText);
+      });
+
+    fetch("tabel_gumbel.csv")
+      .then(response => response.text())
+      .then(csvText => {
+        tabelGumbel = parseCsvOtomatis(csvText);
+      });
+
+    fetch("tabel_pearson_3.csv")
+      .then(response => response.text())
+      .then(csvText => {
+        tabelPearson3 = parseCsvOtomatis(csvText);
+        console.log("tabelPearson3 terbaca:", tabelPearson3.slice(0, 5));
+      });
+
+    function ambilGumbelDariTabel(n) {
+      const data = tabelGumbel
+        .map(row => ({
+          n: angka(row.n),
+          Yn: angka(row.Yn),
+          Sn: angka(row.Sn)
+        }))
+        .filter(row => !isNaN(row.n) && !isNaN(row.Yn) && !isNaN(row.Sn))
+        .sort((a, b) => a.n - b.n);
+
+      const exact = data.find(row => row.n === n);
+      if (exact) return exact;
+
+      for (let i = 0; i < data.length - 1; i++) {
+        const bawah = data[i];
+        const atas = data[i + 1];
+
+        if (n > bawah.n && n < atas.n) {
+          const rasio = (n - bawah.n) / (atas.n - bawah.n);
+
+          return {
+            n: n,
+            Yn: bawah.Yn + rasio * (atas.Yn - bawah.Yn),
+            Sn: bawah.Sn + rasio * (atas.Sn - bawah.Sn)
+          };
+        }
+      }
+
+      return null;
+    }
+
+    function ambilKPearsonDariTabel(cs, T) {
+      const kolom = "T" + T;
+
+      const data = tabelPearson3
+        .map(row => ({
+          Cs: angka(row.Cs),
+          K: angka(row[kolom])
+        }))
+        .filter(row => !isNaN(row.Cs) && !isNaN(row.K))
+        .sort((a, b) => a.Cs - b.Cs);
+
+      const exact = data.find(row => Math.abs(row.Cs - cs) < 0.0000001);
+      if (exact) return exact.K;
+
+      for (let i = 0; i < data.length - 1; i++) {
+        const bawah = data[i];
+        const atas = data[i + 1];
+
+        if (cs >= bawah.Cs && cs <= atas.Cs) {
+          const rasio = (cs - bawah.Cs) / (atas.Cs - bawah.Cs);
+          return bawah.K + rasio * (atas.K - bawah.K);
+        }
+      }
+
+      return null;
+    }
+
+    function ambilGPearsonDariTabel(cs, kolom) {
+      const data = tabelPearson3
+        .map(row => ({
+          Cs: angka(row.Cs),
+          G: angka(row[kolom])
+        }))
+        .filter(row => !isNaN(row.Cs) && !isNaN(row.G))
+        .sort((a, b) => a.Cs - b.Cs);
+
+      const exact = data.find(row => Math.abs(row.Cs - cs) < 0.0000001);
+      if (exact) return exact.G;
+
+      for (let i = 0; i < data.length - 1; i++) {
+        const bawah = data[i];
+        const atas = data[i + 1];
+
+        if (cs >= bawah.Cs && cs <= atas.Cs) {
+          const rasio = (cs - bawah.Cs) / (atas.Cs - bawah.Cs);
+          return bawah.G + rasio * (atas.G - bawah.G);
+        }
+      }
+
+      return null;
+    }
+
+    function hitungSmirnovKolmogorov(dataValid, metode, statistik, dataGumbel) {
+      const n = dataValid.length;
+      const dataUrut = [...dataValid].sort((a, b) => a - b);
+      let dMaks = 0;
+
+      dataUrut.forEach((x, index) => {
+        const peluangEmpiris = (index + 1) / (n + 1);
+        let peluangTeoritis = 0;
+
+        if (metode === "normal") {
+          peluangTeoritis = normalCDF((x - statistik.mean) / statistik.sd);
+        }
+
+        if (metode === "lognormal") {
+          const logX = Math.log10(x);
+          peluangTeoritis = normalCDF((logX - statistik.meanLog) / statistik.sdLog);
+        }
+
+        if (metode === "gumbel") {
+          const alphaGumbel = statistik.sd / dataGumbel.Sn;
+          const u = statistik.mean - alphaGumbel * dataGumbel.Yn;
+          peluangTeoritis = Math.exp(-Math.exp(-(x - u) / alphaGumbel));
+        }
+
+        if (metode === "logpearson3") {
+          const logX = Math.log10(x);
+          peluangTeoritis = pearson3CDF(logX, statistik.meanLog, statistik.sdLog, statistik.csLog);
+        }
+
+        const selisih = Math.abs(peluangEmpiris - peluangTeoritis);
+        if (selisih > dMaks) dMaks = selisih;
+      });
+
+      const dTabel = 1.36 / Math.sqrt(n);
+
+      return {
+        dMaks: dMaks,
+        dTabel: dTabel,
+        kesimpulan: dMaks < dTabel ? "Diterima" : "Ditolak"
+      };
+    }
+
+    function hitungChiSquare(dataValid, metode, statistik, dataGumbel, alphaChiSquare) {
+      const n = dataValid.length;
+      const jumlahKelas = 5;
+      const expected = n / jumlahKelas;
+      let batas = [];
+      let faktorBatas = [];
+
+      if (metode === "normal") {
+        const peluangBatas = [0.2, 0.4, 0.6, 0.8];
+
+        batas = peluangBatas.map(p => {
+          const k = inverseNormal(p);
+          faktorBatas.push({
+            kolom: "P" + Math.round(p * 100),
+            faktor: k
+          });
+          return statistik.mean + k * statistik.sd;
+        });
+      }
+
+      if (metode === "lognormal") {
+        const peluangBatas = [0.2, 0.4, 0.6, 0.8];
+
+        batas = peluangBatas.map(p => {
+          const k = inverseNormal(p);
+          faktorBatas.push({
+            kolom: "P" + Math.round(p * 100),
+            faktor: k
+          });
+          const logBatas = statistik.meanLog + k * statistik.sdLog;
+          return Math.pow(10, logBatas);
+        });
+      }
+
+      if (metode === "gumbel") {
+        const peluangBatas = [0.2, 0.4, 0.6, 0.8];
+
+        batas = peluangBatas.map(p => {
+          const yt = -Math.log(-Math.log(p));
+          const k = (yt - dataGumbel.Yn) / dataGumbel.Sn;
+
+          faktorBatas.push({
+            kolom: "P" + Math.round(p * 100),
+            faktor: k
+          });
+
+          return statistik.mean + k * statistik.sd;
+        });
+      }
+
+      if (metode === "logpearson3") {
+        const kolomBatas = ["P80", "P60", "P40", "P20"];
+
+        batas = kolomBatas.map(kolom => {
+          const g = ambilGPearsonDariTabel(statistik.csLog, kolom);
+
+          if (g === null) {
+            return null;
+          }
+
+          faktorBatas.push({
+            kolom: kolom,
+            faktor: g
+          });
+
+          const logBatas = statistik.meanLog + g * statistik.sdLog;
+          return Math.pow(10, logBatas);
+        });
+
+        if (batas.some(x => x === null || isNaN(x))) {
+          return {
+            error: "Nilai G untuk batas kelas Log Pearson III tidak ditemukan di tabel_pearson_3.csv."
+          };
+        }
+      }
+
+      const gabunganBatas = batas.map((nilai, index) => ({
+        batas: nilai,
+        faktor: faktorBatas[index] ? faktorBatas[index].faktor : null,
+        kolom: faktorBatas[index] ? faktorBatas[index].kolom : ""
+      }));
+
+      gabunganBatas.sort((a, b) => a.batas - b.batas);
+
+      batas = gabunganBatas.map(item => item.batas);
+      faktorBatas = gabunganBatas.map(item => ({
+        kolom: item.kolom,
+        faktor: item.faktor
+      }));
+
+      const observed = new Array(jumlahKelas).fill(0);
+
+      dataValid.forEach(x => {
+        let kelas = jumlahKelas - 1;
+
+        for (let i = 0; i < batas.length; i++) {
+          if (x <= batas[i]) {
+            kelas = i;
+            break;
+          }
+        }
+
+        observed[kelas] += 1;
+      });
+
+      let x2Hitung = 0;
+      const detail = [];
+
+      for (let i = 0; i < jumlahKelas; i++) {
+        const oi = observed[i];
+        const ei = expected;
+        const x2 = Math.pow(oi - ei, 2) / ei;
+
+        x2Hitung += x2;
+
+        let interval = "";
+        let faktorInfo = "";
+
+        if (i === 0) {
+          interval = "≤ " + batas[0].toFixed(2);
+          faktorInfo = faktorBatas[0] ? faktorBatas[0].kolom + " / " + faktorBatas[0].faktor.toFixed(5) : "";
+        } else if (i === jumlahKelas - 1) {
+          interval = "> " + batas[batas.length - 1].toFixed(2);
+          faktorInfo = "-";
+        } else {
+          interval = batas[i - 1].toFixed(2) + " - " + batas[i].toFixed(2);
+          faktorInfo = faktorBatas[i] ? faktorBatas[i].kolom + " / " + faktorBatas[i].faktor.toFixed(5) : "";
+        }
+
+        detail.push({
+          kelas: i + 1,
+          interval: interval,
+          faktorInfo: faktorInfo,
+          Oi: oi,
+          Ei: ei,
+          X2: x2
+        });
+      }
+
+      let parameter = 2;
+
+      if (metode === "logpearson3") {
+        parameter = 3;
+      }
+
+      let derajatBebas = jumlahKelas - 1 - parameter;
+
+      if (derajatBebas < 1) {
+        derajatBebas = 1;
+      }
+
+      const x2Tabel = chiSquareCritical(derajatBebas, alphaChiSquare);
+
+      return {
+        jumlahKelas: jumlahKelas,
+        expected: expected,
+        derajatBebas: derajatBebas,
+        x2Hitung: x2Hitung,
+        x2Tabel: x2Tabel,
+        alpha: alphaChiSquare,
+        alphaLabel: labelAlpha(alphaChiSquare),
+        kesimpulan: x2Tabel !== null && x2Hitung < x2Tabel ? "Diterima" : "Ditolak",
+        detail: detail,
+        batas: batas
+      };
+    }
+
+    function hitungHujanRencana(data, metode, alphaChiSquare) {
+      const kalaUlang = [2, 5, 10];
+      const hasil = [];
+
+      const dataValid = data
+        .map(x => angka(x))
+        .filter(x => !isNaN(x) && x > 0);
+
+      if (dataValid.length < 3) {
+        return { error: "Data valid terlalu sedikit." };
+      }
+
+      const n = dataValid.length;
+
+      const mean = rataRata(dataValid);
+      const sd = standarDeviasi(dataValid);
+
+      const logData = dataValid.map(x => Math.log10(x));
+      const meanLog = rataRata(logData);
+      const sdLog = standarDeviasi(logData);
+      const csLog = skewness(logData);
+
+      const dataGumbel = ambilGumbelDariTabel(n);
+
+      if (metode === "gumbel" && !dataGumbel) {
+        return {
+          error: "Nilai Yn dan Sn untuk jumlah data ini tidak ditemukan di tabel_gumbel.csv."
+        };
+      }
+
+      kalaUlang.forEach(T => {
+        const peluang = 1 - (1 / T);
+        const z = inverseNormal(peluang);
+
+        let xt = 0;
+        let k = 0;
+
+        if (metode === "normal") {
+          k = z;
+          xt = mean + k * sd;
+        }
+
+        if (metode === "lognormal") {
+          k = z;
+          xt = Math.pow(10, meanLog + k * sdLog);
+        }
+
+        if (metode === "gumbel") {
+          const yt = -Math.log(-Math.log((T - 1) / T));
+          const yn = dataGumbel.Yn;
+          const sn = dataGumbel.Sn;
+
+          k = (yt - yn) / sn;
+          xt = mean + k * sd;
+        }
+
+        if (metode === "logpearson3") {
+          k = ambilKPearsonDariTabel(csLog, T);
+
+          if (k === null) {
+            xt = null;
+          } else {
+            xt = Math.pow(10, meanLog + k * sdLog);
+          }
+        }
+
+        hasil.push({
+          T: T,
+          K: k,
+          hujan: xt
+        });
+      });
+
+      if (metode === "logpearson3" && hasil.some(item => item.hujan === null)) {
+        return {
+          error: "Nilai K Log Pearson III tidak ditemukan di tabel_pearson_3.csv. Cek rentang Cs tabel."
+        };
+      }
+
+      const statistik = {
+        mean: mean,
+        sd: sd,
+        meanLog: meanLog,
+        sdLog: sdLog,
+        csLog: csLog
+      };
+
+      const hasilSK = hitungSmirnovKolmogorov(dataValid, metode, statistik, dataGumbel);
+      const hasilChiSquare = hitungChiSquare(dataValid, metode, statistik, dataGumbel, alphaChiSquare);
+
+      if (hasilChiSquare.error) {
+        return { error: hasilChiSquare.error };
+      }
+
+      return {
+        jumlahData: dataValid.length,
+        rataRata: mean,
+        standarDeviasi: sd,
+        rataRataLog: meanLog,
+        standarDeviasiLog: sdLog,
+        skewnessLog: csLog,
+        gumbelYn: dataGumbel ? dataGumbel.Yn : null,
+        gumbelSn: dataGumbel ? dataGumbel.Sn : null,
+        hasil: hasil,
+        smirnovKolmogorov: hasilSK,
+        chiSquare: hasilChiSquare
+      };
+    }
+
+    document.getElementById("btnHitungHujan").addEventListener("click", function () {
+      const stasiun = document.getElementById("pilihStasiun").value;
+      const metode = document.getElementById("pilihMetode").value;
+      const alphaChiSquare = document.getElementById("pilihAlphaChiSquare").value;
+      const hasilDiv = document.getElementById("hasilHujanRencana");
+
+      if (dataHujanBMKG.length === 0) {
+        hasilDiv.innerHTML = `
+          <div class="hasil-box">
+            Data hujan belum terbaca. Coba refresh halaman.
+          </div>
+        `;
+        return;
+      }
+
+      if (metode === "gumbel" && tabelGumbel.length === 0) {
+        hasilDiv.innerHTML = `
+          <div class="hasil-box">
+            tabel_gumbel.csv belum terbaca. Coba refresh halaman.
+          </div>
+        `;
+        return;
+      }
+
+      if (metode === "logpearson3" && tabelPearson3.length === 0) {
+        hasilDiv.innerHTML = `
+          <div class="hasil-box">
+            tabel_pearson_3.csv belum terbaca. Coba refresh halaman.
+          </div>
+        `;
+        return;
+      }
+
+      const dataStasiun = dataHujanBMKG.map(row => row[stasiun]);
+      const hasil = hitungHujanRencana(dataStasiun, metode, alphaChiSquare);
+
+      if (hasil.error) {
+        hasilDiv.innerHTML = `
+          <div class="hasil-box">
+            ${hasil.error}
+          </div>
+        `;
+        return;
+      }
+
+      const namaMetode = {
+        normal: "Normal",
+        lognormal: "Log Normal",
+        gumbel: "Gumbel",
+        logpearson3: "Log Pearson Tipe III"
+      }[metode];
+
+      let html = `
+        <div class="hasil-box">
+          <b>Metode ${namaMetode}</b><br>
+          Jumlah data valid: ${hasil.jumlahData}
+
+          <table>
+            <tr>
+              <th>Kala Ulang</th>
+              <th>K</th>
+              <th>Hujan</th>
+            </tr>
+      `;
+
+      hasil.hasil.forEach(item => {
+        html += `
+          <tr>
+            <td>${item.T} tahun</td>
+            <td>${item.K.toFixed(5)}</td>
+            <td>${item.hujan.toFixed(2)} mm</td>
+          </tr>
+        `;
+      });
+
+      html += `
+          </table>
+
+          <br>
+          <b>Uji Smirnov-Kolmogorov</b>
+
+          <table>
+            <tr>
+              <td>D maksimum</td>
+              <td>${hasil.smirnovKolmogorov.dMaks.toFixed(5)}</td>
+            </tr>
+            <tr>
+              <td>D tabel 5%</td>
+              <td>${hasil.smirnovKolmogorov.dTabel.toFixed(5)}</td>
+            </tr>
+            <tr>
+              <td>Kesimpulan</td>
+              <td><b>${hasil.smirnovKolmogorov.kesimpulan}</b></td>
+            </tr>
+          </table>
+
+          <br>
+          <b>Uji Chi-Square</b>
+
+          <table>
+            <tr>
+              <td>Taraf Signifikansi</td>
+              <td>${hasil.chiSquare.alphaLabel}</td>
+            </tr>
+            <tr>
+              <td>Jumlah Kelas</td>
+              <td>${hasil.chiSquare.jumlahKelas}</td>
+            </tr>
+            <tr>
+              <td>Expected Frequency</td>
+              <td>${hasil.chiSquare.expected.toFixed(4)}</td>
+            </tr>
+            <tr>
+              <td>Derajat Bebas</td>
+              <td>${hasil.chiSquare.derajatBebas}</td>
+            </tr>
+            <tr>
+              <td>X² Hitung</td>
+              <td>${hasil.chiSquare.x2Hitung.toFixed(5)}</td>
+            </tr>
+            <tr>
+              <td>X² Tabel ${hasil.chiSquare.alphaLabel}</td>
+              <td>${hasil.chiSquare.x2Tabel.toFixed(5)}</td>
+            </tr>
+            <tr>
+              <td>Kesimpulan</td>
+              <td><b>${hasil.chiSquare.kesimpulan}</b></td>
+            </tr>
+          </table>
+
+          <table>
+            <tr>
+              <th>Kelas</th>
+              <th>Interval</th>
+              <th>Faktor</th>
+              <th>Oi</th>
+              <th>Ei</th>
+              <th>X²</th>
+            </tr>
+      `;
+
+      hasil.chiSquare.detail.forEach(item => {
+        html += `
+          <tr>
+            <td>${item.kelas}</td>
+            <td>${item.interval}</td>
+            <td>${item.faktorInfo}</td>
+            <td>${item.Oi}</td>
+            <td>${item.Ei.toFixed(2)}</td>
+            <td>${item.X2.toFixed(4)}</td>
+          </tr>
+        `;
+      });
+
+      html += `
+          </table>
+
+          <div class="statistik-kecil">
+            Rata-rata X: ${hasil.rataRata.toFixed(4)}<br>
+            Standar deviasi X: ${hasil.standarDeviasi.toFixed(4)}<br>
+            Rata-rata log X: ${hasil.rataRataLog.toFixed(4)}<br>
+            Standar deviasi log X: ${hasil.standarDeviasiLog.toFixed(4)}<br>
+            Cs log X: ${hasil.skewnessLog.toFixed(4)}<br>
+      `;
+
+      if (metode === "gumbel") {
+        html += `
+            Yn: ${hasil.gumbelYn.toFixed(4)}<br>
+            Sn: ${hasil.gumbelSn.toFixed(4)}<br>
+        `;
+      }
+
+      html += `
+            <br>
+            Catatan:<br>
+            - Log memakai log10.<br>
+            - Standar deviasi memakai n-1.<br>
+            - Uji Smirnov-Kolmogorov memakai D tabel = 1.36 / √n untuk α = 5%.<br>
+            - Peluang empiris Smirnov memakai m / (n + 1).<br>
+            - Chi-Square memakai 5 kelas.<br>
+            - Gumbel Chi-Square memakai batas kelas X̄ + K × S.<br>
+            - Log Pearson III Chi-Square memakai batas kelas logX̄ + G × Slog.<br>
+            - Untuk Log Pearson III, urutan batas kelas memakai P80, P60, P40, P20 agar sesuai luasan kiri 20%, 40%, 60%, 80%.<br>
+            - File CSV dipanggil dengan cache-buster ?v=3.
+          </div>
+        </div>
+      `;
+
+      hasilDiv.innerHTML = html;
+    });
+
+    function toggleGroup(groupId, iconId) {
+      var group = document.getElementById(groupId);
+      var icon = document.getElementById(iconId);
+
+      if (group.style.display === "none") {
+        group.style.display = "block";
+        icon.textContent = "▾";
+      } else {
+        group.style.display = "none";
+        icon.textContent = "▸";
+      }
+    }
+
+    document.getElementById("togglePanel").addEventListener("click", function () {
+      var panel = document.getElementById("layerPanel");
+      panel.classList.toggle("minimized");
+
+      if (panel.classList.contains("minimized")) {
+        this.textContent = "›";
+      } else {
+        this.textContent = "−";
+      }
+
+      setTimeout(function () {
+        map.invalidateSize();
+      }, 300);
+    });
+
+    /* KALKULATOR HIDROLIKA */
+    let daftarTutupanLahanQ = [];
+    let intensitasTerakhir = null;
+
+    function formatAngka(nilai, digit) {
+      if (isNaN(nilai) || !isFinite(nilai)) {
+        return "-";
+      }
+
+      return nilai.toFixed(digit);
+    }
+
+    function renderDaftarTutupanLahan() {
+      const daftarDiv = document.getElementById("daftarTutupanLahan");
+
+      if (daftarTutupanLahanQ.length === 0) {
+        daftarDiv.style.display = "none";
+        daftarDiv.innerHTML = "";
+        return;
+      }
+
+      let totalLuas = 0;
+      let totalCxA = 0;
+
+      let html = `
+        <b>Daftar Tutupan Lahan</b>
+        <table>
+          <tr>
+            <td><b>Jenis</b></td>
+            <td><b>C</b></td>
+            <td><b>Luas</b></td>
+            <td><b>Aksi</b></td>
+          </tr>
+      `;
+
+      daftarTutupanLahanQ.forEach((item, index) => {
+        totalLuas += item.luas;
+        totalCxA += item.c * item.luas;
+
+        html += `
+          <tr>
+            <td>${item.nama}</td>
+            <td>${item.c.toFixed(2)}</td>
+            <td>${item.luas.toFixed(3)} ha</td>
+            <td><button type="button" onclick="hapusTutupanLahan(${index})" style="padding: 3px 6px; font-size: 11px;">Hapus</button></td>
+          </tr>
+        `;
+      });
+
+      const cGabungan = totalLuas > 0 ? totalCxA / totalLuas : 0;
+
+      html += `
+        </table>
+        <div class="statistik-kecil">
+          Total luas A: ${totalLuas.toFixed(3)} ha<br>
+          C gabungan sementara: ${cGabungan.toFixed(3)}
+        </div>
+      `;
+
+      daftarDiv.style.display = "block";
+      daftarDiv.innerHTML = html;
+    }
+
+    function tambahTutupanLahan() {
+      const select = document.getElementById("pilihTutupanLahan");
+      const option = select.options[select.selectedIndex];
+      const nama = select.value || "Manual / Lainnya";
+      const cMin = parseFloat(option.getAttribute("data-min"));
+      const cMax = parseFloat(option.getAttribute("data-max"));
+      const c = parseFloat(document.getElementById("nilaiCManual").value);
+      const luas = parseFloat(document.getElementById("luasTutupanLahan").value);
+
+      if (isNaN(c) || c < 0 || c > 1) {
+        alert("Mohon isi nilai C secara manual antara 0 sampai 1.");
+        return;
+      }
+
+      if (isNaN(luas) || luas <= 0) {
+        alert("Mohon isi luas tutupan lahan lebih besar dari 0.");
+        return;
+      }
+
+      if (!isNaN(cMin) && !isNaN(cMax) && (c < cMin || c > cMax)) {
+        const lanjut = confirm("Nilai C yang kamu isi berada di luar rentang tabel untuk kategori ini. Tetap tambahkan?");
+        if (!lanjut) {
+          return;
+        }
+      }
+
+      daftarTutupanLahanQ.push({
+        nama: nama,
+        c: c,
+        luas: luas
+      });
+
+      document.getElementById("luasTutupanLahan").value = "";
+      renderDaftarTutupanLahan();
+    }
+
+    function updateRentangC() {
+      const select = document.getElementById("pilihTutupanLahan");
+      const option = select.options[select.selectedIndex];
+      const cMin = option.getAttribute("data-min");
+      const cMax = option.getAttribute("data-max");
+      const inputC = document.getElementById("nilaiCManual");
+      const info = document.getElementById("infoRentangC");
+
+      if (cMin === "" || cMax === "") {
+        info.innerHTML = "Pilih tata guna lahan untuk melihat rentang nilai C, lalu isi nilai C manual sesuai kondisi lapangan.";
+        inputC.placeholder = "Contoh: 0.70";
+        return;
+      }
+
+      info.innerHTML = `Rentang C berdasarkan tabel: <b>${parseFloat(cMin).toFixed(2)} - ${parseFloat(cMax).toFixed(2)}</b>. Isi nilai C manual dalam rentang tersebut sesuai kondisi lapangan.`;
+      inputC.placeholder = `Contoh: ${parseFloat(cMin).toFixed(2)} s/d ${parseFloat(cMax).toFixed(2)}`;
+
+      if (inputC.value === "") {
+        const nilaiTengah = (parseFloat(cMin) + parseFloat(cMax)) / 2;
+        inputC.value = nilaiTengah.toFixed(2);
+      }
+    }
+
+    function hapusTutupanLahan(index) {
+      daftarTutupanLahanQ.splice(index, 1);
+      renderDaftarTutupanLahan();
+    }
+
+    function updateFormHidrolika() {
+      const jenisPerhitungan = document.getElementById("pilihPerhitunganHidrolika").value;
+      const metodeTc = document.getElementById("pilihMetodeTc").value;
+      const qFields = document.getElementById("qRasionalFields");
+      const fieldFaa = document.getElementById("fieldFaa");
+      const btnHitungQ = document.getElementById("btnHitungHidrolika");
+
+      if (jenisPerhitungan === "q_rasional") {
+        qFields.style.display = "block";
+        btnHitungQ.style.display = "block";
+        fieldFaa.style.display = "none";
+
+        if (intensitasTerakhir !== null && document.getElementById("intensitasQ").value === "") {
+          document.getElementById("intensitasQ").value = intensitasTerakhir.toFixed(2);
+        }
+      } else {
+        qFields.style.display = "none";
+        btnHitungQ.style.display = "none";
+
+        if (metodeTc === "faa") {
+          fieldFaa.style.display = "block";
+        } else {
+          fieldFaa.style.display = "none";
+        }
+      }
+    }
+
+    function hitungIntensitasSaja() {
+      const jenisPerhitungan = document.getElementById("pilihPerhitunganHidrolika").value;
+      const metodeTc = document.getElementById("pilihMetodeTc").value;
+      const elevasiHulu = parseFloat(document.getElementById("elevasiHulu").value);
+      const elevasiHilir = parseFloat(document.getElementById("elevasiHilir").value);
+      const panjangSaluran = parseFloat(document.getElementById("panjangSaluran").value);
+      const r24 = parseFloat(document.getElementById("r24Hujan").value);
+      const hasilDiv = document.getElementById("hasilHidrolika");
+
+      if (isNaN(elevasiHulu) || isNaN(elevasiHilir) || isNaN(panjangSaluran)) {
+        hasilDiv.innerHTML = `
+          <div class="hasil-hidrolika">
+            Mohon isi elevasi hulu, elevasi hilir, dan panjang saluran terlebih dahulu.
+          </div>
+        `;
+        return;
+      }
+
+      if (panjangSaluran <= 0) {
+        hasilDiv.innerHTML = `
+          <div class="hasil-hidrolika">
+            Panjang saluran harus lebih besar dari 0.
+          </div>
+        `;
+        return;
+      }
+
+      if (isNaN(r24) || r24 <= 0) {
+        hasilDiv.innerHTML = `
+          <div class="hasil-hidrolika">
+            Mohon isi nilai R24 / hujan harian maksimum lebih besar dari 0.
+          </div>
+        `;
+        return;
+      }
+
+      const bedaElevasi = elevasiHulu - elevasiHilir;
+      const slope = bedaElevasi / panjangSaluran;
+
+      if (slope <= 0) {
+        hasilDiv.innerHTML = `
+          <div class="hasil-hidrolika">
+            Nilai slope tidak boleh 0 atau negatif.<br>
+            Pastikan elevasi hulu lebih besar dari elevasi hilir.
+          </div>
+        `;
+        return;
+      }
+
+      let tcMenit = null;
+      let panjangFeet = panjangSaluran * 3.28084;
+      let cFaa = null;
+
+      if (metodeTc === "kirpich") {
+        tcMenit = 0.0195 * Math.pow(panjangSaluran, 0.77) * Math.pow(slope, -0.385);
+      }
+
+      if (metodeTc === "faa") {
+        cFaa = parseFloat(document.getElementById("nilaiCFaa").value);
+
+        if (isNaN(cFaa) || cFaa < 0 || cFaa > 1) {
+          hasilDiv.innerHTML = `
+            <div class="hasil-hidrolika">
+              Mohon isi nilai C FAA antara 0 sampai 1.
+            </div>
+          `;
+          return;
+        }
+
+        tcMenit = (1.8 * (1.1 - cFaa) * Math.pow(panjangFeet, 0.5)) / Math.pow(slope, 0.33);
+      }
+
+      const tcJamAsli = tcMenit / 60;
+      const tcJam = parseFloat(tcJamAsli.toFixed(3));
+      const intensitas = (r24 / 24) * Math.pow(24 / tcJam, 2 / 3);
+
+      intensitasTerakhir = intensitas;
+      document.getElementById("intensitasQ").value = intensitas.toFixed(2);
+
+      let html = `
+        <div class="hasil-hidrolika">
+          <b>Hasil Perhitungan Intensitas Hujan</b>
+
+          <table>
+            <tr>
+              <td>Metode tc</td>
+              <td>${metodeTc === "kirpich" ? "Kirpich" : "FAA"}</td>
+            </tr>
+            <tr>
+              <td>Beda Elevasi</td>
+              <td>${formatAngka(bedaElevasi, 3)} m</td>
+            </tr>
+            <tr>
+              <td>Panjang Saluran / L</td>
+              <td>${formatAngka(panjangSaluran, 2)} m</td>
+            </tr>
+            <tr>
+              <td>Slope / S</td>
+              <td>${formatAngka(slope, 6)} m/m</td>
+            </tr>
+      `;
+
+      if (metodeTc === "faa") {
+        html += `
+            <tr>
+              <td>Panjang Saluran</td>
+              <td>${formatAngka(panjangFeet, 2)} feet</td>
+            </tr>
+            <tr>
+              <td>C FAA</td>
+              <td>${formatAngka(cFaa, 3)}</td>
+            </tr>
+        `;
+      }
+
+      html += `
+            <tr>
+              <td>tc</td>
+              <td>${formatAngka(tcMenit, 3)} menit</td>
+            </tr>
+            <tr>
+              <td>tc</td>
+              <td>${formatAngka(tcJam, 3)} jam</td>
+            </tr>
+            <tr>
+              <td>R24</td>
+              <td>${formatAngka(r24, 2)} mm</td>
+            </tr>
+            <tr>
+              <td>Intensitas / I</td>
+              <td><b>${formatAngka(intensitas, 2)} mm/jam</b></td>
+            </tr>
+          </table>
+
+          <div class="statistik-kecil">
+            Hasil perhitungan ini sudah menampilkan nilai tc dan intensitas hujan / I.<br>
+            Nilai I otomatis masuk ke kolom Intensitas Hujan / I pada menu Q Rancangan.
+          </div>
+        </div>
+      `;
+
+      hasilDiv.innerHTML = html;
+
+    }
+
+    function hitungQRasional() {
+      const intensitas = parseFloat(document.getElementById("intensitasQ").value);
+      const hasilDiv = document.getElementById("hasilHidrolika");
+
+      if (isNaN(intensitas) || intensitas <= 0) {
+        hasilDiv.innerHTML = `
+          <div class="hasil-hidrolika">
+            Mohon isi intensitas hujan / I lebih besar dari 0.
+          </div>
+        `;
+        return;
+      }
+
+      if (daftarTutupanLahanQ.length === 0) {
+        hasilDiv.innerHTML = `
+          <div class="hasil-hidrolika">
+            Tambahkan minimal satu jenis tutupan lahan terlebih dahulu.
+          </div>
+        `;
+        return;
+      }
+
+      let totalLuas = 0;
+      let totalCxA = 0;
+
+      daftarTutupanLahanQ.forEach(item => {
+        totalLuas += item.luas;
+        totalCxA += item.c * item.luas;
+      });
+
+      const cGabungan = totalCxA / totalLuas;
+      const qRancangan = 0.00278 * cGabungan * intensitas * totalLuas;
+
+      let html = `
+        <div class="hasil-hidrolika">
+          <b>Hasil Tahap 3: Q Rancangan Metode Rasional</b>
+
+          <table>
+            <tr>
+              <td>Intensitas / I</td>
+              <td>${formatAngka(intensitas, 2)} mm/jam</td>
+            </tr>
+            <tr>
+              <td>Total Luas / A</td>
+              <td>${formatAngka(totalLuas, 3)} ha</td>
+            </tr>
+            <tr>
+              <td>Σ(C × A)</td>
+              <td>${formatAngka(totalCxA, 3)}</td>
+            </tr>
+            <tr>
+              <td>C Gabungan</td>
+              <td>${formatAngka(cGabungan, 3)}</td>
+            </tr>
+            <tr>
+              <td>Q Rancangan</td>
+              <td><b>${formatAngka(qRancangan, 3)} m³/detik</b></td>
+            </tr>
+          </table>
+
+          <div class="statistik-kecil">
+            Rumus:<br>
+            Cgab = Σ(Ci × Ai) / ΣAi<br>
+            Q = 0,00278 × Cgab × I × A<br><br>
+            Catatan:<br>
+            - I menggunakan satuan mm/jam.<br>
+            - A menggunakan satuan hektar.<br>
+            - Q keluar dalam satuan m³/detik.
+          </div>
+        </div>
+      `;
+
+      hasilDiv.innerHTML = html;
+    }
+
+    function hitungHidrolika() {
+      const jenisPerhitungan = document.getElementById("pilihPerhitunganHidrolika").value;
+
+      if (jenisPerhitungan === "q_rasional") {
+        hitungQRasional();
+        return;
+      }
+      const metodeTc = document.getElementById("pilihMetodeTc").value;
+      const elevasiHulu = parseFloat(document.getElementById("elevasiHulu").value);
+      const elevasiHilir = parseFloat(document.getElementById("elevasiHilir").value);
+      const panjangSaluran = parseFloat(document.getElementById("panjangSaluran").value);
+      const r24 = parseFloat(document.getElementById("r24Hujan").value);
+      const hasilDiv = document.getElementById("hasilHidrolika");
+
+      if (isNaN(elevasiHulu) || isNaN(elevasiHilir) || isNaN(panjangSaluran)) {
+        hasilDiv.innerHTML = `
+          <div class="hasil-hidrolika">
+            Mohon isi elevasi hulu, elevasi hilir, dan panjang saluran terlebih dahulu.
+          </div>
+        `;
+        return;
+      }
+
+      if (panjangSaluran <= 0) {
+        hasilDiv.innerHTML = `
+          <div class="hasil-hidrolika">
+            Panjang saluran harus lebih besar dari 0.
+          </div>
+        `;
+        return;
+      }
+
+      const bedaElevasi = elevasiHulu - elevasiHilir;
+      const slope = bedaElevasi / panjangSaluran;
+
+      if (slope <= 0) {
+        hasilDiv.innerHTML = `
+          <div class="hasil-hidrolika">
+            Nilai slope tidak boleh 0 atau negatif.<br>
+            Pastikan elevasi hulu lebih besar dari elevasi hilir.
+          </div>
+        `;
+        return;
+      }
+
+      let tcMenit = null;
+      let panjangFeet = panjangSaluran * 3.28084;
+      let cFaa = null;
+
+      if (metodeTc === "kirpich") {
+        tcMenit = 0.0195 * Math.pow(panjangSaluran, 0.77) * Math.pow(slope, -0.385);
+      }
+
+      if (metodeTc === "faa") {
+        cFaa = parseFloat(document.getElementById("nilaiCFaa").value);
+
+        if (isNaN(cFaa) || cFaa < 0 || cFaa > 1) {
+          hasilDiv.innerHTML = `
+            <div class="hasil-hidrolika">
+              Mohon isi nilai C FAA antara 0 sampai 1.
+            </div>
+          `;
+          return;
+        }
+
+        tcMenit = (1.8 * (1.1 - cFaa) * Math.pow(panjangFeet, 0.5)) / Math.pow(slope, 0.33);
+      }
+
+      /*
+        tcJamAsli = hasil asli dari tc menit / 60.
+        tcJam = dibulatkan 3 angka desimal untuk mengikuti cara tabel manual.
+        Intensitas dihitung memakai tcJam yang sudah dibulatkan.
+      */
+      const tcJamAsli = tcMenit / 60;
+      const tcJam = parseFloat(tcJamAsli.toFixed(3));
+
+      let intensitas = null;
+
+      if (jenisPerhitungan === "intensitas") {
+        if (isNaN(r24) || r24 <= 0) {
+          hasilDiv.innerHTML = `
+            <div class="hasil-hidrolika">
+              Mohon isi nilai R24 / hujan harian maksimum untuk menghitung intensitas hujan.
+            </div>
+          `;
+          return;
+        }
+
+        intensitas = (r24 / 24) * Math.pow(24 / tcJam, 2 / 3);
+        intensitasTerakhir = intensitas;
+      }
+
+      let html = `
+        <div class="hasil-hidrolika">
+          <b>Hasil Perhitungan Intensitas Hujan</b>
+
+          <table>
+            <tr>
+              <td>Metode tc</td>
+              <td>${metodeTc === "kirpich" ? "Kirpich" : "FAA"}</td>
+            </tr>
+            <tr>
+              <td>Elevasi Hulu</td>
+              <td>${formatAngka(elevasiHulu, 3)} m</td>
+            </tr>
+            <tr>
+              <td>Elevasi Hilir</td>
+              <td>${formatAngka(elevasiHilir, 3)} m</td>
+            </tr>
+            <tr>
+              <td>Beda Elevasi</td>
+              <td>${formatAngka(bedaElevasi, 3)} m</td>
+            </tr>
+            <tr>
+              <td>Panjang Saluran / L</td>
+              <td>${formatAngka(panjangSaluran, 2)} m</td>
+            </tr>
+            <tr>
+              <td>Slope / S</td>
+              <td>${formatAngka(slope, 6)} m/m</td>
+            </tr>
+      `;
+
+      if (metodeTc === "faa") {
+        html += `
+            <tr>
+              <td>Panjang Saluran</td>
+              <td>${formatAngka(panjangFeet, 2)} feet</td>
+            </tr>
+            <tr>
+              <td>C FAA</td>
+              <td>${formatAngka(cFaa, 3)}</td>
+            </tr>
+        `;
+      }
+
+      if (jenisPerhitungan === "intensitas") {
+        html += `
+            <tr>
+              <td>tc ${metodeTc === "kirpich" ? "Kirpich" : "FAA"}</td>
+              <td>${formatAngka(tcMenit, 3)} menit</td>
+            </tr>
+            <tr>
+              <td>tc</td>
+              <td>${formatAngka(tcJam, 3)} jam</td>
+            </tr>
+        `;
+      }
+
+      if (jenisPerhitungan === "intensitas") {
+        html += `
+            <tr>
+              <td>R24</td>
+              <td>${formatAngka(r24, 2)} mm</td>
+            </tr>
+            <tr>
+              <td>Intensitas Hujan / I</td>
+              <td><b>${formatAngka(intensitas, 2)} mm/jam</b></td>
+            </tr>
+        `;
+      }
+
+      html += `
+          </table>
+
+          <div class="statistik-kecil">
+            Catatan:<br>
+            - Slope dihitung dari (Elevasi Hulu − Elevasi Hilir) / Panjang Saluran.<br>
+            - tc Kirpich dan FAA menggunakan satuan menit.<br>
+            - Untuk rumus intensitas, nilai t menggunakan tc dalam satuan jam.<br>
+            - Intensitas dihitung memakai tc jam yang dibulatkan 3 angka desimal agar mendekati format tabel manual.
+          </div>
+        </div>
+      `;
+
+      hasilDiv.innerHTML = html;
+    }
+
+    document.getElementById("btnHitungIntensitas").addEventListener("click", hitungIntensitasSaja);
+    document.getElementById("btnHitungHidrolika").addEventListener("click", hitungHidrolika);
+    document.getElementById("pilihPerhitunganHidrolika").addEventListener("change", updateFormHidrolika);
+    document.getElementById("pilihMetodeTc").addEventListener("change", updateFormHidrolika);
+    document.getElementById("btnTambahTutupanLahan").addEventListener("click", tambahTutupanLahan);
+    document.getElementById("pilihTutupanLahan").addEventListener("change", updateRentangC);
+    updateFormHidrolika();
+    updateRentangC();
+
+    document.getElementById("toggleHydraulicPanel").addEventListener("click", function () {
+      const panel = document.getElementById("hydraulicPanel");
+      panel.classList.toggle("minimized");
+
+      if (panel.classList.contains("minimized")) {
+        this.textContent = "‹";
+      } else {
+        this.textContent = "−";
+      }
+
+      setTimeout(function () {
+        map.invalidateSize();
+      }, 300);
+    });
+
+    /* FITUR SEARCH JALAN DAN LOKASI SAAT INI */
+    let markerCariJalan = null;
+    let markerLokasiSaya = null;
+    let circleAkurasiLokasi = null;
+
+    const ikonLokasiSaya = L.divIcon({
+      className: "",
+      html: '<div class="lokasi-saya-marker"></div>',
+      iconSize: [22, 22],
+      iconAnchor: [11, 11]
+    });
+
+    function tampilkanHasilCariJalan(data) {
+      const list = document.getElementById("searchResultList");
+
+      if (!data || data.length === 0) {
+        list.style.display = "block";
+        list.innerHTML = `
+          <div class="search-result-item">
+            Tidak ada hasil ditemukan. Coba pakai kata kunci lain.
+          </div>
+        `;
+        return;
+      }
+
+      let html = "";
+
+      data.slice(0, 6).forEach((item, index) => {
+        const nama = item.display_name || "Lokasi tanpa nama";
+        html += `
+          <div class="search-result-item" onclick="pilihHasilCariJalan(${index})">
+            <div class="search-result-title">Hasil ${index + 1}</div>
+            ${nama}
+          </div>
+        `;
+      });
+
+      list.dataset.hasil = JSON.stringify(data.slice(0, 6));
+      list.style.display = "block";
+      list.innerHTML = html;
+    }
+
+    function cariJalan() {
+      const input = document.getElementById("inputCariJalan");
+      const kataKunci = input.value.trim();
+      const list = document.getElementById("searchResultList");
+
+      if (kataKunci === "") {
+        alert("Masukkan nama jalan atau lokasi yang ingin dicari.");
+        return;
+      }
+
+      list.style.display = "block";
+      list.innerHTML = `
+        <div class="search-result-item">
+          Mencari lokasi...
+        </div>
+      `;
+
+      const query = encodeURIComponent(kataKunci + ", Jakarta, Indonesia");
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=6&addressdetails=1&q=${query}`;
+
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          tampilkanHasilCariJalan(data);
+        })
+        .catch(error => {
+          console.error(error);
+          list.style.display = "block";
+          list.innerHTML = `
+            <div class="search-result-item">
+              Pencarian gagal. Coba beberapa saat lagi.
+            </div>
+          `;
+        });
+    }
+
+    function pilihHasilCariJalan(index) {
+      const list = document.getElementById("searchResultList");
+      const data = JSON.parse(list.dataset.hasil || "[]");
+      const item = data[index];
+
+      if (!item) return;
+
+      const lat = parseFloat(item.lat);
+      const lon = parseFloat(item.lon);
+
+      if (isNaN(lat) || isNaN(lon)) return;
+
+      if (markerCariJalan) {
+        map.removeLayer(markerCariJalan);
+      }
+
+      markerCariJalan = L.marker([lat, lon]).addTo(map);
+      markerCariJalan.bindPopup(`
+        <b>Hasil Pencarian</b><br>
+        ${item.display_name}
+      `).openPopup();
+
+      map.setView([lat, lon], 18);
+      list.style.display = "none";
+    }
+
+    function tampilkanLokasiSaya() {
+      if (!navigator.geolocation) {
+        alert("Browser kamu belum mendukung fitur lokasi.");
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        function (posisi) {
+          const lat = posisi.coords.latitude;
+          const lon = posisi.coords.longitude;
+          const akurasi = posisi.coords.accuracy;
+
+          if (markerLokasiSaya) {
+            map.removeLayer(markerLokasiSaya);
+          }
+
+          if (circleAkurasiLokasi) {
+            map.removeLayer(circleAkurasiLokasi);
+          }
+
+          markerLokasiSaya = L.marker([lat, lon], {
+            icon: ikonLokasiSaya
+          }).addTo(map);
+
+          circleAkurasiLokasi = L.circle([lat, lon], {
+            radius: akurasi,
+            color: "#2563eb",
+            weight: 1,
+            fillColor: "#2563eb",
+            fillOpacity: 0.12
+          }).addTo(map);
+
+          markerLokasiSaya.bindPopup(`
+            <b>Lokasi Saya</b><br>
+            Akurasi sekitar ${akurasi.toFixed(0)} meter
+          `).openPopup();
+
+          map.setView([lat, lon], 18);
+        },
+        function () {
+          alert("Lokasi tidak bisa diakses. Pastikan izin lokasi di browser sudah diaktifkan.");
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    }
+
+    document.getElementById("btnCariJalan").addEventListener("click", cariJalan);
+    document.getElementById("btnLokasiSaya").addEventListener("click", tampilkanLokasiSaya);
+    document.getElementById("inputCariJalan").addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        cariJalan();
+      }
+    });
+
+    /* FITUR GAMBAR DAN UKUR PETA */
+    let layerGambarUkur = new L.FeatureGroup();
+    map.addLayer(layerGambarUkur);
+
+    let luasTerakhirHa = null;
+    let panjangTerakhirM = null;
+    let handlerGambarAktif = null;
+
+    const drawControl = new L.Control.Draw({
+      position: "topleft",
+      draw: {
+        polygon: {
+          allowIntersection: false,
+          showArea: true,
+          shapeOptions: {
+            color: "#0f766e",
+            weight: 2,
+            fillOpacity: 0.25
+          }
+        },
+        polyline: {
+          shapeOptions: {
+            color: "#dc2626",
+            weight: 3
+          }
+        },
+        rectangle: false,
+        circle: false,
+        marker: false,
+        circlemarker: false
+      },
+      edit: {
+        featureGroup: layerGambarUkur,
+        remove: true
+      }
+    });
+
+    map.addControl(drawControl);
+
+    map.on(L.Draw.Event.DRAWSTART, function (event) {
+      if (
+        drawControl._toolbars &&
+        drawControl._toolbars.draw &&
+        drawControl._toolbars.draw._modes &&
+        drawControl._toolbars.draw._modes[event.layerType]
+      ) {
+        handlerGambarAktif = drawControl._toolbars.draw._modes[event.layerType].handler;
+      }
+    });
+
+    map.on(L.Draw.Event.DRAWSTOP, function () {
+      handlerGambarAktif = null;
+    });
+
+    map.on("contextmenu", function (event) {
+      if (handlerGambarAktif && typeof handlerGambarAktif.deleteLastVertex === "function") {
+        event.originalEvent.preventDefault();
+        handlerGambarAktif.deleteLastVertex();
+      }
+    });
+
+    function tampilkanPanelUkur(html) {
+      const panel = document.getElementById("measurementPanel");
+      panel.style.display = "block";
+      panel.innerHTML = html;
+    }
+
+    function tutupPanelUkur() {
+      const panel = document.getElementById("measurementPanel");
+      panel.style.display = "none";
+      panel.innerHTML = "";
+    }
+
+    function hitungLuasPolygon(layer) {
+      const geojson = layer.toGeoJSON();
+      const luasM2 = turf.area(geojson);
+      const luasHa = luasM2 / 10000;
+
+      luasTerakhirHa = luasHa;
+
+      const popupHtml = `
+        <b>Hasil Ukur Catchment Area</b><br>
+        Luas: ${luasHa.toFixed(4)} ha<br>
+        Luas: ${luasM2.toFixed(2)} m²<br><br>
+        <button onclick="gunakanLuasKeQRasional()">Gunakan ke Q Rancangan</button>
+      `;
+
+      layer.bindPopup(popupHtml).openPopup();
+
+      tampilkanPanelUkur(`
+        <b>Polygon Catchment Area</b><br>
+        Luas: ${luasHa.toFixed(4)} ha<br>
+        Luas: ${luasM2.toFixed(2)} m²<br>
+        <button onclick="gunakanLuasKeQRasional()">Gunakan ke Q Rancangan</button>
+        <button onclick="tutupPanelUkur()">Tutup</button>
+      `);
+    }
+
+    function hitungPanjangLine(layer) {
+      const geojson = layer.toGeoJSON();
+      const panjangKm = turf.length(geojson, { units: "kilometers" });
+      const panjangM = panjangKm * 1000;
+
+      panjangTerakhirM = panjangM;
+
+      const popupHtml = `
+        <b>Hasil Ukur Panjang Saluran</b><br>
+        Panjang: ${panjangM.toFixed(2)} m<br>
+        Panjang: ${panjangKm.toFixed(4)} km<br><br>
+        <button onclick="gunakanPanjangKeL()">Gunakan ke Panjang Saluran</button>
+      `;
+
+      layer.bindPopup(popupHtml).openPopup();
+
+      tampilkanPanelUkur(`
+        <b>Garis Panjang Saluran</b><br>
+        Panjang: ${panjangM.toFixed(2)} m<br>
+        Panjang: ${panjangKm.toFixed(4)} km<br>
+        <button onclick="gunakanPanjangKeL()">Gunakan ke Panjang Saluran</button>
+        <button onclick="tutupPanelUkur()">Tutup</button>
+      `);
+    }
+
+    function prosesLayerUkur(layer) {
+      const geojson = layer.toGeoJSON();
+      const tipe = geojson.geometry.type;
+
+      if (tipe === "Polygon" || tipe === "MultiPolygon") {
+        hitungLuasPolygon(layer);
+      }
+
+      if (tipe === "LineString" || tipe === "MultiLineString") {
+        hitungPanjangLine(layer);
+      }
+    }
+
+    map.on(L.Draw.Event.CREATED, function (event) {
+      const layer = event.layer;
+      layerGambarUkur.addLayer(layer);
+      prosesLayerUkur(layer);
+    });
+
+    map.on(L.Draw.Event.EDITED, function (event) {
+      event.layers.eachLayer(function (layer) {
+        prosesLayerUkur(layer);
+      });
+    });
+
+    function gunakanLuasKeQRasional() {
+      if (luasTerakhirHa === null) {
+        alert("Belum ada polygon catchment yang diukur.");
+        return;
+      }
+
+      document.getElementById("pilihPerhitunganHidrolika").value = "q_rasional";
+      updateFormHidrolika();
+      document.getElementById("luasTutupanLahan").value = luasTerakhirHa.toFixed(4);
+      document.getElementById("luasTutupanLahan").focus();
+
+      tampilkanPanelUkur(`
+        <b>Luas berhasil dimasukkan</b><br>
+        Luas ${luasTerakhirHa.toFixed(4)} ha sudah masuk ke kolom Luas Area Tutupan Lahan.<br>
+        Pilih tata guna lahan, isi nilai C, lalu klik Tambah Tutupan Lahan.
+        <br><button onclick="tutupPanelUkur()">Tutup</button>
+      `);
+    }
+
+    function gunakanPanjangKeL() {
+      if (panjangTerakhirM === null) {
+        alert("Belum ada garis saluran yang diukur.");
+        return;
+      }
+
+      document.getElementById("panjangSaluran").value = panjangTerakhirM.toFixed(2);
+      document.getElementById("panjangSaluran").focus();
+
+      tampilkanPanelUkur(`
+        <b>Panjang berhasil dimasukkan</b><br>
+        Panjang ${panjangTerakhirM.toFixed(2)} m sudah masuk ke kolom Panjang Saluran / L.
+        <br><button onclick="tutupPanelUkur()">Tutup</button>
+      `);
+    }
+  </script>
+</body>
+</html>
