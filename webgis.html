@@ -819,11 +819,16 @@
               <button class="btn btn-light" id="btnInputCAManual" type="button">Input Manual</button>
             </div>
             <label>
+              Import CA dari KMZ / KML
+              <input type="file" id="inputImportCA" accept=".kmz,.kml,application/vnd.google-earth.kmz,application/vnd.google-earth.kml+xml">
+            </label>
+            <div class="mini-result" id="hasilImportCA">Belum ada file CA yang diimport.</div>
+            <label>
               Luas CA Total (ha)
-              <input type="number" id="luasCATotal" step="0.0001" placeholder="Otomatis dari polygon atau isi manual">
+              <input type="number" id="luasCATotal" step="0.0001" placeholder="Otomatis dari polygon, KMZ/KML, atau isi manual">
             </label>
             <div class="note">
-              Polygon CA yang digambar akan otomatis mengisi luas CA dalam hektar.
+              Polygon CA yang digambar atau diimport dari KMZ/KML akan otomatis menempel di peta dan mengisi luas CA dalam hektar.
             </div>
           </div>
         </div>
@@ -1024,6 +1029,8 @@
   <script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js"></script>
   <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
   <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://unpkg.com/@mapbox/togeojson@0.16.0/togeojson.js"></script>
 
   <script>
     var map = L.map("map", { zoomControl: true }).setView([-6.225, 106.900], 11);
@@ -2280,9 +2287,116 @@
       tampilkanPanelUkur(`<b>Mode Gambar Panjang Saluran</b><br>Gambar garis dari hulu ke hilir/outlet untuk segmen aktif: ${seg?.nama || "-"}.`);
     }
 
+    function pastikanSegmenAktifUntukImport() {
+      let seg = getActiveSegment();
+      if (seg) return seg;
+      const nomor = segmenList.length + 1;
+      seg = buatSegmenDefault("Saluran " + nomor);
+      segmenList.push(seg);
+      activeSegmentId = seg.id;
+      refreshPilihanSegmenAktif();
+      loadSegmenToForm();
+      return seg;
+    }
+
+    function ambilPolygonDariGeoJSON(geojson) {
+      const fitur = [];
+      if (!geojson) return { type: "FeatureCollection", features: [] };
+      const sumber = geojson.type === "FeatureCollection" ? geojson.features : [geojson];
+      sumber.forEach(item => {
+        if (!item) return;
+        if (item.type === "Feature" && item.geometry) {
+          if (item.geometry.type === "Polygon" || item.geometry.type === "MultiPolygon") fitur.push(item);
+        } else if (item.type === "Polygon" || item.type === "MultiPolygon") {
+          fitur.push({ type: "Feature", properties: {}, geometry: item });
+        }
+      });
+      return { type: "FeatureCollection", features: fitur };
+    }
+
+    function hitungLuasFeatureCollectionHa(geojson) {
+      if (!geojson || !geojson.features || !geojson.features.length) return 0;
+      const totalM2 = geojson.features.reduce((sum, feature) => sum + turf.area(feature), 0);
+      return totalM2 / 10000;
+    }
+
+    async function bacaKmlDariFileCA(file) {
+      const nama = (file.name || "").toLowerCase();
+      if (nama.endsWith(".kmz")) {
+        if (typeof JSZip === "undefined") throw new Error("Library JSZip belum termuat. Cek koneksi internet atau CDN.");
+        const zip = await JSZip.loadAsync(file);
+        const daftarKml = Object.keys(zip.files).filter(namaFile => namaFile.toLowerCase().endsWith(".kml") && !zip.files[namaFile].dir);
+        if (!daftarKml.length) throw new Error("File KMZ tidak berisi dokumen KML.");
+        return await zip.files[daftarKml[0]].async("text");
+      }
+      return await file.text();
+    }
+
+    async function prosesImportCA(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      const hasilEl = document.getElementById("hasilImportCA");
+      hasilEl.innerHTML = "Membaca file CA...";
+
+      try {
+        if (typeof toGeoJSON === "undefined" || typeof toGeoJSON.kml !== "function") {
+          throw new Error("Library toGeoJSON belum termuat. Cek koneksi internet atau CDN.");
+        }
+
+        const seg = pastikanSegmenAktifUntukImport();
+        const kmlText = await bacaKmlDariFileCA(file);
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(kmlText, "text/xml");
+        const parseError = xml.getElementsByTagName("parsererror")[0];
+        if (parseError) throw new Error("Format KML/KMZ tidak terbaca dengan benar.");
+
+        const geojsonAsli = toGeoJSON.kml(xml);
+        const geojson = ambilPolygonDariGeoJSON(geojsonAsli);
+        if (!geojson.features.length) throw new Error("Tidak ditemukan polygon CA di file. Pastikan file KMZ/KML berisi polygon, bukan hanya garis/titik.");
+
+        const luasHa = hitungLuasFeatureCollectionHa(geojson);
+        if (!luasHa || luasHa <= 0) throw new Error("Luas polygon tidak valid.");
+
+        hapusLayerById(seg.caLayerId);
+
+        const layer = L.geoJSON(geojson, {
+          pane: "paneCA",
+          style: {
+            color: seg.warna || "#dc2626",
+            fillColor: seg.warna || "#dc2626",
+            fillOpacity: 0.22,
+            weight: 2
+          },
+          onEachFeature: function(feature, layerFeature) {
+            layerFeature.bindPopup(`<b>Catchment Area Import</b><br>${seg.nama}<br>File: ${file.name}<br>Luas: ${luasHa.toFixed(4)} ha`);
+          }
+        });
+
+        layerGambarUkur.addLayer(layer);
+        seg.caLayerId = L.Util.stamp(layer);
+        seg.luasCA = luasHa;
+        document.getElementById("luasCATotal").value = luasHa.toFixed(4);
+
+        const bounds = layer.getBounds();
+        if (bounds && bounds.isValid()) map.fitBounds(bounds.pad(0.15));
+
+        hasilEl.innerHTML = `CA berhasil diimport.<br>File: <b>${file.name}</b><br>Luas: <b>${luasHa.toFixed(4)} ha</b> (${(luasHa / 100).toFixed(5)} km²)`;
+        tampilkanPanelUkur(`<b>CA KMZ/KML berhasil diimport</b><br>${seg.nama}<br>Luas: ${luasHa.toFixed(4)} ha<br><button onclick="tutupPanelUkur()">Tutup</button>`);
+        refreshAll();
+      } catch (err) {
+        console.error(err);
+        hasilEl.innerHTML = `<span style="color:#b91c1c;">Gagal import CA: ${err.message}</span>`;
+        alert("Gagal import CA: " + err.message);
+      } finally {
+        event.target.value = "";
+      }
+    }
+
     document.getElementById("btnGambarCA").addEventListener("click", mulaiGambarCA);
     document.getElementById("btnGambarPanjang").addEventListener("click", mulaiGambarPanjang);
     document.getElementById("btnInputCAManual").addEventListener("click", function() { document.getElementById("luasCATotal").focus(); });
+    document.getElementById("inputImportCA").addEventListener("change", prosesImportCA);
     document.getElementById("btnInputPanjangManual").addEventListener("click", function() { document.getElementById("panjangSaluran").focus(); });
 
     map.on(L.Draw.Event.DRAWSTART, function (event) {
