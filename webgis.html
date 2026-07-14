@@ -565,6 +565,63 @@
       font-size: 12px !important;
     }
 
+    .hydraulic-visual-box {
+      background: white;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 10px;
+      margin-top: 8px;
+    }
+
+    .visual-title {
+      margin: 0 0 8px;
+      color: #0f766e;
+      font-size: 13px;
+      font-weight: bold;
+    }
+
+    .visual-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+      margin-bottom: 8px;
+    }
+
+    .visual-item {
+      background: #f8fafc;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 7px;
+      font-size: 11.5px;
+    }
+
+    .visual-item span {
+      display: block;
+      color: #6b7280;
+      margin-bottom: 2px;
+    }
+
+    .visual-item b {
+      color: #0f766e;
+      font-size: 12px;
+    }
+
+    #canvasPenampang {
+      width: 100%;
+      height: 270px;
+      background: #fafafa;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      display: block;
+    }
+
+    .visual-note {
+      margin-top: 8px;
+      font-size: 11.5px;
+      color: #4b5563;
+      line-height: 1.45;
+    }
+
     @media (max-width: 1100px) {
       #segmentPanel { min-width: 340px; width: 35%; }
       #searchLocationPanel { max-width: 360px; width: 360px; }
@@ -816,6 +873,7 @@
                 Metode Tc
                 <select id="metodeTc">
                   <option value="kirpich" selected>Kirpich</option>
+                  <option value="mcdermott">McDermott / Pilgrim-McDermott</option>
                 </select>
               </label>
             </div>
@@ -929,11 +987,24 @@
             </div>
             <button class="btn" id="btnHitungKapasitas" type="button">Hitung Kapasitas Saluran</button>
             <div class="mini-result" id="hasilKapasitasMini">Kapasitas saluran belum dihitung.</div>
+
+            <div class="hydraulic-visual-box">
+              <div class="visual-title">Visualisasi Penampang seperti HEC-RAS</div>
+              <div class="visual-grid">
+                <div class="visual-item"><span>Tinggi air estimasi</span><b id="vizTinggiAir">-</b></div>
+                <div class="visual-item"><span>Persen terisi</span><b id="vizPersenIsi">-</b></div>
+                <div class="visual-item"><span>Sisa jagaan / ruang bebas</span><b id="vizJagaan">-</b></div>
+                <div class="visual-item"><span>Status penampang</span><b id="vizStatus">-</b></div>
+              </div>
+              <canvas id="canvasPenampang" width="420" height="270"></canvas>
+              <div class="visual-note" id="vizNote">Visual penampang akan muncul setelah Q rencana dan kapasitas saluran dihitung.</div>
+            </div>
           </div>
         </div>
 
-        <div class="btn-row">
+        <div class="btn-row-3">
           <button class="btn btn-secondary" id="btnSimpanLocal" type="button">Simpan Data</button>
+          <button class="btn" id="btnExportWord" type="button">Jadikan Word</button>
           <button class="btn btn-danger" id="btnResetSemua" type="button">Reset Semua</button>
         </div>
       </div>
@@ -1404,6 +1475,10 @@
         rHidrolik: null,
         vSaluran: null,
         qSaluran: null,
+        kedalamanVisual: null,
+        persenIsiVisual: null,
+        sisaJagaanVisual: null,
+        statusVisual: null,
         status: "Belum Lengkap",
         caLayerId: null,
         lineLayerId: null
@@ -1564,9 +1639,37 @@
 
     function hitungIntensitasSegmen(seg) {
       hitungTurunanDasar(seg);
-      if (!seg.panjangL || seg.panjangL <= 0) return { error: "Panjang saluran belum valid." };
-      if (!seg.slope || seg.slope <= 0) return { error: "Slope belum valid. Isi elevasi atau slope manual." };
-      if (!seg.r24 || seg.r24 <= 0) return { error: "R24 belum valid." };
+
+      if (!seg.r24 || seg.r24 <= 0) {
+        return { error: "R24 belum valid." };
+      }
+
+      const metodeTc = seg.metodeTc || "kirpich";
+
+      if (metodeTc === "mcdermott") {
+        const totalTutupan = seg.tutupan.reduce((sum, item) => sum + item.luas, 0);
+        const luasHa = totalTutupan > 0 ? totalTutupan : seg.luasCA;
+
+        if (!luasHa || luasHa <= 0) {
+          return { error: "Luas catchment belum valid untuk metode McDermott." };
+        }
+
+        const luasKm2 = luasHa / 100;
+        const tcJamAsli = 0.76 * Math.pow(luasKm2, 0.38);
+        seg.tcMenit = tcJamAsli * 60;
+        seg.tcJam = parseFloat(tcJamAsli.toFixed(3));
+        seg.intensitas = (seg.r24 / 24) * Math.pow(24 / seg.tcJam, 2 / 3);
+        return { ok: true };
+      }
+
+      if (!seg.panjangL || seg.panjangL <= 0) {
+        return { error: "Panjang saluran belum valid." };
+      }
+
+      if (!seg.slope || seg.slope <= 0) {
+        return { error: "Slope belum valid. Isi elevasi atau slope manual." };
+      }
+
       seg.tcMenit = 0.0195 * Math.pow(seg.panjangL, 0.77) * Math.pow(seg.slope, -0.385);
       const tcJamAsli = seg.tcMenit / 60;
       seg.tcJam = parseFloat(tcJamAsli.toFixed(3));
@@ -1586,6 +1689,249 @@
       seg.luasCA = luasPakai;
       updateStatusSegmen(seg);
       return { ok: true };
+    }
+
+    function hitungQRectDepth(b, y, n, s) {
+      if (!b || !y || !n || !s || y <= 0 || b <= 0 || n <= 0 || s <= 0) return 0;
+      const A = b * y;
+      const P = b + 2 * y;
+      const R = A / P;
+      const V = (1 / n) * Math.pow(R, 2 / 3) * Math.pow(s, 0.5);
+      return A * V;
+    }
+
+    function hitungAPRcp(D, y) {
+      const r = D / 2;
+      if (!D || D <= 0 || !y || y <= 0) return { A: 0, P: 0, R: 0 };
+      let A = 0, P = 0;
+      if (y >= D) {
+        A = Math.PI * D * D / 4;
+        P = Math.PI * D;
+      } else {
+        const theta = 2 * Math.acos((r - y) / r);
+        A = 0.5 * r * r * (theta - Math.sin(theta));
+        P = r * theta;
+      }
+      const R = P > 0 ? A / P : 0;
+      return { A, P, R };
+    }
+
+    function hitungQRcpDepth(D, y, n, s) {
+      const ap = hitungAPRcp(D, y);
+      if (ap.A <= 0 || ap.P <= 0 || !n || !s || n <= 0 || s <= 0) return 0;
+      const V = (1 / n) * Math.pow(ap.R, 2 / 3) * Math.pow(s, 0.5);
+      return ap.A * V;
+    }
+
+    function cariKedalamanAliran(seg) {
+      const n = seg.manningN || 0.015;
+      const sKap = seg.slopeKapasitas && seg.slopeKapasitas > 0 ? seg.slopeKapasitas : seg.slope;
+      if (!seg || !seg.qRencana || seg.qRencana <= 0 || !n || !sKap || sKap <= 0) return null;
+
+      if (seg.jenisSaluran === 'rcp') {
+        const D = seg.diameter;
+        if (!D || D <= 0) return null;
+        const qMax = hitungQRcpDepth(D, D, n, sKap);
+        let overflow = seg.qRencana > qMax;
+        let y = D;
+        if (!overflow) {
+          let low = 0, high = D;
+          for (let i = 0; i < 45; i++) {
+            const mid = (low + high) / 2;
+            const qMid = hitungQRcpDepth(D, mid, n, sKap);
+            if (qMid < seg.qRencana) low = mid; else high = mid;
+          }
+          y = (low + high) / 2;
+        }
+        return {
+          y: y,
+          maxDepth: D,
+          persen: Math.max(0, Math.min(100, (y / D) * 100)),
+          sisaJagaan: Math.max(0, D - y),
+          overflow: overflow,
+          statusText: overflow ? 'Tidak memenuhi (melampaui kapasitas pipa)' : 'Aman / masih tertampung'
+        };
+      }
+
+      const b = seg.lebar;
+      const h = seg.tinggi;
+      const jagaan = seg.jagaan || 0;
+      const hEfektif = h - jagaan;
+      if (!b || !h || b <= 0 || h <= 0 || hEfektif <= 0) return null;
+      const qMax = hitungQRectDepth(b, hEfektif, n, sKap);
+      let overflow = seg.qRencana > qMax;
+      let y = hEfektif;
+      if (!overflow) {
+        let low = 0, high = hEfektif;
+        for (let i = 0; i < 45; i++) {
+          const mid = (low + high) / 2;
+          const qMid = hitungQRectDepth(b, mid, n, sKap);
+          if (qMid < seg.qRencana) low = mid; else high = mid;
+        }
+        y = (low + high) / 2;
+      }
+      return {
+        y: y,
+        maxDepth: h,
+        persen: Math.max(0, Math.min(100, (y / h) * 100)),
+        sisaJagaan: Math.max(0, h - y),
+        overflow: overflow,
+        garisJagaan: hEfektif,
+        statusText: overflow ? 'Tidak memenuhi (air melampaui tinggi rencana)' : 'Aman / masih tertampung'
+      };
+    }
+
+    function gambarPenampangKosong(pesan) {
+      const canvas = document.getElementById('canvasPenampang');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#fafafa';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = '#d1d5db';
+      ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
+      ctx.fillStyle = '#6b7280';
+      ctx.font = '13px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(pesan, canvas.width / 2, canvas.height / 2);
+      document.getElementById('vizTinggiAir').textContent = '-';
+      document.getElementById('vizPersenIsi').textContent = '-';
+      document.getElementById('vizJagaan').textContent = '-';
+      document.getElementById('vizStatus').textContent = '-';
+      document.getElementById('vizNote').textContent = pesan;
+    }
+
+    function gambarPenampang(seg) {
+      if (!seg) { gambarPenampangKosong('Belum ada segmen aktif.'); return; }
+      if (seg.qRencana === null || seg.qRencana === undefined) { gambarPenampangKosong('Hitung Q rencana terlebih dahulu agar tinggi air bisa ditampilkan.'); return; }
+      if (seg.qSaluran === null || seg.qSaluran === undefined) { gambarPenampangKosong('Hitung kapasitas saluran terlebih dahulu.'); return; }
+
+      const hasil = cariKedalamanAliran(seg);
+      if (!hasil) { gambarPenampangKosong('Data dimensi atau slope belum cukup untuk menampilkan penampang.'); return; }
+
+      seg.kedalamanVisual = hasil.y;
+      seg.persenIsiVisual = hasil.persen;
+      seg.sisaJagaanVisual = hasil.sisaJagaan;
+      seg.statusVisual = hasil.statusText;
+
+      document.getElementById('vizTinggiAir').textContent = formatAngka(hasil.y, 3) + ' m';
+      document.getElementById('vizPersenIsi').textContent = formatAngka(hasil.persen, 1) + ' %';
+      document.getElementById('vizJagaan').textContent = formatAngka(hasil.sisaJagaan, 3) + ' m';
+      document.getElementById('vizStatus').textContent = hasil.statusText;
+      document.getElementById('vizNote').textContent = hasil.overflow
+        ? 'Tampilan menunjukkan kondisi air saat Q rencana melebihi kapasitas saluran. Perlu pembesaran dimensi atau perubahan kemiringan.'
+        : 'Tampilan menunjukkan tinggi air estimasi untuk menampung Q rencana pada penampang saluran aktif.';
+
+      const canvas = document.getElementById('canvasPenampang');
+      const ctx = canvas.getContext('2d');
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = '#fafafa';
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = '#d1d5db';
+      ctx.strokeRect(0.5, 0.5, W - 1, H - 1);
+
+      const margin = { left: 55, right: 35, top: 28, bottom: 42 };
+      const drawW = W - margin.left - margin.right;
+      const drawH = H - margin.top - margin.bottom;
+      const bottomY = H - margin.bottom;
+
+      function drawLabel(text, x, y, align='left', color='#111827', font='12px Arial') {
+        ctx.fillStyle = color;
+        ctx.font = font;
+        ctx.textAlign = align;
+        ctx.fillText(text, x, y);
+      }
+
+      if (seg.jenisSaluran === 'rcp') {
+        const D = seg.diameter;
+        const scale = Math.min(drawW / (D * 1.5), drawH / (D * 1.35));
+        const r = (D * scale) / 2;
+        const cx = margin.left + drawW / 2;
+        const cy = bottomY - r - 8;
+
+        ctx.fillStyle = '#e5e7eb';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#111827';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        const y = Math.max(0, Math.min(D, hasil.y));
+        if (y > 0) {
+          const waterLevelY = cy + r - (y / D) * (2 * r);
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(cx, cy, r - 1, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.fillStyle = '#22d3ee';
+          ctx.fillRect(cx - r - 2, waterLevelY, 2 * r + 4, cy + r - waterLevelY + 2);
+          ctx.restore();
+          ctx.beginPath();
+          ctx.moveTo(cx - r - 5, waterLevelY);
+          ctx.lineTo(cx + r + 5, waterLevelY);
+          ctx.strokeStyle = '#2563eb';
+          ctx.setLineDash([6, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          drawLabel('Muka air', cx + r + 10, waterLevelY + 4, 'left', '#2563eb');
+        }
+
+        drawLabel('D = ' + formatAngka(D, 2) + ' m', cx, bottomY + 20, 'center');
+        drawLabel('y = ' + formatAngka(hasil.y, 2) + ' m', cx, margin.top - 8, 'center', '#0f766e', 'bold 12px Arial');
+      } else {
+        const b = seg.lebar;
+        const h = seg.tinggi;
+        const jagaan = seg.jagaan || 0;
+        const scale = Math.min(drawW / (b * 1.45), drawH / (h * 1.25));
+        const rectW = b * scale;
+        const rectH = h * scale;
+        const x = margin.left + (drawW - rectW) / 2;
+        const yTop = bottomY - rectH;
+
+        ctx.fillStyle = '#e5e7eb';
+        ctx.fillRect(x, yTop, rectW, rectH);
+        ctx.strokeStyle = '#111827';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, yTop, rectW, rectH);
+
+        const airDepth = Math.max(0, Math.min(h, hasil.y));
+        const waterH = airDepth * scale;
+        ctx.fillStyle = '#22d3ee';
+        ctx.fillRect(x + 1, bottomY - waterH, rectW - 2, waterH);
+
+        ctx.beginPath();
+        ctx.moveTo(x - 8, bottomY - waterH);
+        ctx.lineTo(x + rectW + 8, bottomY - waterH);
+        ctx.strokeStyle = '#2563eb';
+        ctx.setLineDash([6, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        drawLabel('Muka air', x + rectW + 12, bottomY - waterH + 4, 'left', '#2563eb');
+
+        const garisJagaan = hasil.garisJagaan || (h - jagaan);
+        if (garisJagaan > 0 && garisJagaan < h) {
+          const yJag = bottomY - garisJagaan * scale;
+          ctx.beginPath();
+          ctx.moveTo(x - 8, yJag);
+          ctx.lineTo(x + rectW + 8, yJag);
+          ctx.strokeStyle = '#f59e0b';
+          ctx.setLineDash([3, 3]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          drawLabel('Batas jagaan', x + rectW + 12, yJag + 4, 'left', '#d97706');
+        }
+
+        drawLabel('b = ' + formatAngka(b, 2) + ' m', x + rectW / 2, bottomY + 20, 'center');
+        drawLabel('h = ' + formatAngka(h, 2) + ' m', x - 10, yTop + rectH / 2, 'right');
+        drawLabel('y = ' + formatAngka(hasil.y, 2) + ' m', x + rectW / 2, margin.top - 8, 'center', '#0f766e', 'bold 12px Arial');
+      }
+
+      drawLabel('Q rencana = ' + formatAngka(seg.qRencana, 3) + ' m³/det', margin.left, H - 10, 'left', '#111827');
+      drawLabel('Q saluran = ' + formatAngka(seg.qSaluran, 3) + ' m³/det', W - margin.right, H - 10, 'right', '#111827');
+      if (hasil.overflow) {
+        drawLabel('PERINGATAN: kapasitas tidak cukup', W / 2, 18, 'center', '#b91c1c', 'bold 13px Arial');
+      }
     }
 
     function hitungKapasitasSegmen(seg) {
@@ -1635,10 +1981,11 @@
       const seg = getActiveSegment();
       if (!seg) {
         document.getElementById("hasilSlopeMini").innerHTML = `Beda elevasi: <b>-</b><br>Slope / S0: <b>-</b>`;
-        document.getElementById("hasilIntensitasMini").innerHTML = `Tc: <b>-</b><br>Tc jam: <b>-</b><br>Intensitas / I: <b>-</b>`;
+        document.getElementById("hasilIntensitasMini").innerHTML = `Metode Tc: <b>-</b><br>Tc: <b>-</b><br>Tc jam: <b>-</b><br>Intensitas / I: <b>-</b>`;
         document.getElementById("hasilCMini").innerHTML = `Total luas tutupan: <b>-</b><br>Σ(C × A): <b>-</b><br>C gabungan: <b>-</b>`;
         document.getElementById("hasilQMini").innerHTML = `Rumus: Q = 0,00278 × Cgab × I × A<br>Q Rencana: <b>-</b>`;
         document.getElementById("hasilKapasitasMini").innerHTML = `A hidrolik: <b>-</b><br>P basah: <b>-</b><br>R hidrolik: <b>-</b><br>V: <b>-</b><br>Q Saluran: <b>-</b>`;
+        gambarPenampangKosong('Belum ada segmen aktif.');
         return;
       }
       hitungTurunanDasar(seg);
@@ -1646,7 +1993,9 @@
         Beda elevasi: <b>${seg.elevasiHulu !== null && seg.elevasiHilir !== null ? formatAngka(seg.elevasiHulu - seg.elevasiHilir, 3) + " m" : "-"}</b><br>
         Slope / S0: <b>${seg.slope !== null ? formatAngka(seg.slope, 6) : "-"}</b>
       `;
+      const labelMetodeTc = (seg.metodeTc || "kirpich") === "mcdermott" ? "McDermott / Pilgrim-McDermott" : "Kirpich";
       document.getElementById("hasilIntensitasMini").innerHTML = `
+        Metode Tc: <b>${labelMetodeTc}</b><br>
         Tc: <b>${seg.tcMenit !== null ? formatAngka(seg.tcMenit, 2) + " menit" : "-"}</b><br>
         Tc jam: <b>${seg.tcJam !== null ? formatAngka(seg.tcJam, 3) + " jam" : "-"}</b><br>
         Intensitas / I: <b>${seg.intensitas !== null ? formatAngka(seg.intensitas, 2) + " mm/jam" : "-"}</b>
@@ -1669,6 +2018,7 @@
         V: <b>${seg.vSaluran !== null ? formatAngka(seg.vSaluran, 2) + " m/detik" : "-"}</b><br>
         Q Saluran: <b>${seg.qSaluran !== null ? formatAngka(seg.qSaluran, 3) + " m³/detik" : "-"}</b>
       `;
+      gambarPenampang(seg);
     }
 
     function renderTutupan() {
@@ -2056,6 +2406,420 @@
       panel.innerHTML = "";
     }
 
+
+    /* EXPORT WORD */
+    function escapeHtml(value) {
+      return String(value === null || value === undefined ? "" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function namaStasiunLabel(value) {
+      const data = {
+        halim: "Halim Perdanakusuma",
+        kemayoran: "Kemayoran",
+        bogor: "Bogor"
+      };
+      return data[value] || value || "-";
+    }
+
+    function namaJenisSaluranLabel(value) {
+      if (value === "rcp") return "Round Concrete Pipe / RCP";
+      return "U-Ditch / Box Culvert Persegi";
+    }
+
+    function namaMetodeTcLabel(value) {
+      if (value === "mcdermott") return "McDermott / Pilgrim-McDermott";
+      return "Kirpich";
+    }
+
+    function cleanFileName(value) {
+      const nama = String(value || "laporan-drainase")
+        .replace(/[^a-zA-Z0-9\-_\s]/g, "")
+        .trim()
+        .replace(/\s+/g, "-");
+      return nama || "laporan-drainase";
+    }
+
+    function nilaiWord(value, digit, suffix) {
+      if (value === null || value === undefined || isNaN(value)) return "-";
+      return formatAngka(Number(value), digit) + (suffix || "");
+    }
+
+    function hitungSemuaSegmenUntukExport() {
+      segmenList.forEach(seg => {
+        hitungTurunanDasar(seg);
+        hitungIntensitasSegmen(seg);
+        hitungCGabungan(seg);
+        hitungQRencanaSegmen(seg);
+        hitungKapasitasSegmen(seg);
+        updateStatusSegmen(seg);
+      });
+    }
+
+    function statusWordClass(status) {
+      if (status === "Memenuhi") return "status-ok";
+      if (status === "Tidak Memenuhi") return "status-no";
+      return "status-warn";
+    }
+
+    function statusBadgeWord(status) {
+      return `<span class="status ${statusWordClass(status)}">${escapeHtml(status || "Belum Lengkap")}</span>`;
+    }
+
+    function safeText(value) {
+      return escapeHtml(value === null || value === undefined || value === "" ? "-" : String(value));
+    }
+
+    function metodeTcFormulaWord(metode) {
+      if (metode === "mcdermott") return "Tc = 0,76 x A^0,38";
+      return "Tc = 0,0195 x L^0,77 x S^-0,385";
+    }
+
+    function dimensiSaluranWord(seg) {
+      if (seg.jenisSaluran === "rcp") {
+        return `D = ${nilaiWord(seg.diameter, 3, " m")}${seg.tinggiAirRcp ? `; tinggi air input = ${nilaiWord(seg.tinggiAirRcp, 3, " m")}` : ""}`;
+      }
+      return `b = ${nilaiWord(seg.lebar, 3, " m")}; h = ${nilaiWord(seg.tinggi, 3, " m")}; jagaan = ${nilaiWord(seg.jagaan, 3, " m")}`;
+    }
+
+    function buatRingkasanWord() {
+      const total = segmenList.length;
+      const memenuhi = segmenList.filter(s => s.status === "Memenuhi").length;
+      const tidak = segmenList.filter(s => s.status === "Tidak Memenuhi").length;
+      const belum = segmenList.filter(s => s.status !== "Memenuhi" && s.status !== "Tidak Memenuhi").length;
+      const totalQr = segmenList.reduce((sum, s) => sum + (s.qRencana || 0), 0);
+      const totalQs = segmenList.reduce((sum, s) => sum + (s.qSaluran || 0), 0);
+      const statusUmum = tidak > 0 ? "Ada Segmen Tidak Memenuhi" : (belum > 0 ? "Belum Lengkap" : "Memenuhi");
+
+      return `
+        <table class="summary-table">
+          <tr>
+            <td><span>Jumlah Segmen</span><b>${total}</b></td>
+            <td><span>Memenuhi</span><b>${memenuhi}</b></td>
+            <td><span>Tidak Memenuhi</span><b>${tidak}</b></td>
+            <td><span>Belum Lengkap</span><b>${belum}</b></td>
+          </tr>
+          <tr>
+            <td><span>Total Q Rencana</span><b>${nilaiWord(totalQr, 3, " m³/det")}</b></td>
+            <td><span>Total Q Saluran</span><b>${nilaiWord(totalQs, 3, " m³/det")}</b></td>
+            <td colspan="2"><span>Status Umum</span><b>${statusBadgeWord(statusUmum)}</b></td>
+          </tr>
+        </table>
+      `;
+    }
+
+    function buatTabelTutupanWord(seg) {
+      if (!seg.tutupan || seg.tutupan.length === 0) {
+        return `<p class="muted">Belum ada data tata guna lahan.</p>`;
+      }
+
+      let rows = seg.tutupan.map((item, index) => `
+        <tr>
+          <td class="center">${index + 1}</td>
+          <td>${escapeHtml(item.nama)}</td>
+          <td class="num">${nilaiWord(item.c, 3, "")}</td>
+          <td class="num">${nilaiWord(item.luas, 4, " ha")}</td>
+          <td class="num">${nilaiWord(item.c * item.luas, 4, "")}</td>
+        </tr>
+      `).join("");
+
+      const totalA = seg.tutupan.reduce((sum, item) => sum + item.luas, 0);
+      const totalCA = seg.tutupan.reduce((sum, item) => sum + item.c * item.luas, 0);
+
+      rows += `
+        <tr class="total-row">
+          <td colspan="3"><b>Total</b></td>
+          <td class="num"><b>${nilaiWord(totalA, 4, " ha")}</b></td>
+          <td class="num"><b>${nilaiWord(totalCA, 4, "")}</b></td>
+        </tr>
+      `;
+
+      return `
+        <table class="data-table small-table">
+          <thead>
+            <tr>
+              <th>No.</th>
+              <th>Tata Guna Lahan</th>
+              <th>C</th>
+              <th>Luas A</th>
+              <th>C x A</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    function buatRekapWord() {
+      if (segmenList.length === 0) return `<p>Belum ada segmen yang dihitung.</p>`;
+
+      const rows = segmenList.map((seg, index) => `
+        <tr>
+          <td class="center">${index + 1}</td>
+          <td>${escapeHtml(seg.nama)}</td>
+          <td class="num">${nilaiWord(seg.panjangL, 2, "")}</td>
+          <td class="num">${nilaiWord(seg.slope, 6, "")}</td>
+          <td class="num">${nilaiWord(seg.tcMenit, 2, "")}</td>
+          <td class="num">${nilaiWord(seg.intensitas, 2, "")}</td>
+          <td class="num">${nilaiWord(seg.luasCA, 4, "")}</td>
+          <td class="num">${nilaiWord(seg.cGabungan, 3, "")}</td>
+          <td class="num">${nilaiWord(seg.qRencana, 3, "")}</td>
+          <td class="num">${nilaiWord(seg.qSaluran, 3, "")}</td>
+          <td class="center">${statusBadgeWord(seg.status)}</td>
+        </tr>
+      `).join("");
+
+      return `
+        <table class="data-table rekap-table">
+          <thead>
+            <tr>
+              <th>No.</th>
+              <th>Segmen</th>
+              <th>L (m)</th>
+              <th>S</th>
+              <th>Tc (menit)</th>
+              <th>I (mm/jam)</th>
+              <th>A (ha)</th>
+              <th>Cgab</th>
+              <th>Qr (m³/det)</th>
+              <th>Qs (m³/det)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    function buatKesimpulanSegmenWord(seg) {
+      if (seg.qRencana === null || seg.qSaluran === null) {
+        return `Data perhitungan segmen belum lengkap sehingga status kapasitas belum dapat disimpulkan.`;
+      }
+      const selisih = seg.qSaluran - seg.qRencana;
+      const rasio = seg.qRencana > 0 ? (seg.qSaluran / seg.qRencana) : null;
+      if (seg.qSaluran >= seg.qRencana) {
+        return `Kapasitas saluran sebesar ${nilaiWord(seg.qSaluran, 3, " m³/detik")} lebih besar daripada debit rencana sebesar ${nilaiWord(seg.qRencana, 3, " m³/detik")}. Dengan demikian, segmen ini dinyatakan memenuhi secara kapasitas hidrolika. Selisih kapasitas adalah ${nilaiWord(selisih, 3, " m³/detik")} dengan rasio Qs/Qr sebesar ${nilaiWord(rasio, 2, "")}.`;
+      }
+      return `Kapasitas saluran sebesar ${nilaiWord(seg.qSaluran, 3, " m³/detik")} lebih kecil daripada debit rencana sebesar ${nilaiWord(seg.qRencana, 3, " m³/detik")}. Dengan demikian, segmen ini belum memenuhi secara kapasitas hidrolika dan perlu evaluasi dimensi, kemiringan, atau alternatif penanganan. Kekurangan kapasitas adalah ${nilaiWord(Math.abs(selisih), 3, " m³/detik")} dengan rasio Qs/Qr sebesar ${nilaiWord(rasio, 2, "")}.`;
+    }
+
+    function buatDetailSegmenWord() {
+      if (segmenList.length === 0) return "";
+
+      return segmenList.map((seg, index) => `
+        <div class="segment-page">
+          <div class="section-bar">
+            <span>Detail Perhitungan Segmen ${index + 1}</span>
+            ${statusBadgeWord(seg.status)}
+          </div>
+
+          <h2>${index + 1}. ${escapeHtml(seg.nama)}</h2>
+
+          <table class="layout-table">
+            <tr>
+              <td style="width:50%;">
+                <h3>A. Parameter Hidrologi</h3>
+                <table class="info-table compact">
+                  <tbody>
+                    <tr><td>Metode Tc</td><td>${escapeHtml(namaMetodeTcLabel(seg.metodeTc))}</td></tr>
+                    <tr><td>Rumus Tc</td><td>${escapeHtml(metodeTcFormulaWord(seg.metodeTc))}</td></tr>
+                    <tr><td>Luas Catchment Area</td><td>${nilaiWord(seg.luasCA, 4, " ha")}</td></tr>
+                    <tr><td>Panjang Saluran / L</td><td>${nilaiWord(seg.panjangL, 2, " m")}</td></tr>
+                    <tr><td>Elevasi Hulu</td><td>${nilaiWord(seg.elevasiHulu, 3, " m")}</td></tr>
+                    <tr><td>Elevasi Hilir</td><td>${nilaiWord(seg.elevasiHilir, 3, " m")}</td></tr>
+                    <tr><td>Slope / S0</td><td>${nilaiWord(seg.slope, 6, "")}</td></tr>
+                    <tr><td>R24</td><td>${nilaiWord(seg.r24, 2, " mm")}</td></tr>
+                    <tr><td>Tc</td><td>${nilaiWord(seg.tcMenit, 2, " menit")} / ${nilaiWord(seg.tcJam, 3, " jam")}</td></tr>
+                    <tr><td>Intensitas Hujan / I</td><td>${nilaiWord(seg.intensitas, 2, " mm/jam")}</td></tr>
+                  </tbody>
+                </table>
+              </td>
+              <td style="width:50%;">
+                <h3>B. Kapasitas Saluran</h3>
+                <table class="info-table compact">
+                  <tbody>
+                    <tr><td>Jenis Saluran</td><td>${escapeHtml(namaJenisSaluranLabel(seg.jenisSaluran))}</td></tr>
+                    <tr><td>Dimensi</td><td>${dimensiSaluranWord(seg)}</td></tr>
+                    <tr><td>S Kapasitas</td><td>${nilaiWord(seg.slopeKapasitas && seg.slopeKapasitas > 0 ? seg.slopeKapasitas : seg.slope, 6, "")}</td></tr>
+                    <tr><td>n Manning</td><td>${nilaiWord(seg.manningN, 3, "")}</td></tr>
+                    <tr><td>A hidrolik</td><td>${nilaiWord(seg.aHidrolik, 3, " m²")}</td></tr>
+                    <tr><td>P basah</td><td>${nilaiWord(seg.pBasah, 3, " m")}</td></tr>
+                    <tr><td>R hidrolik</td><td>${nilaiWord(seg.rHidrolik, 3, " m")}</td></tr>
+                    <tr><td>V</td><td>${nilaiWord(seg.vSaluran, 2, " m/detik")}</td></tr>
+                    <tr><td>Q Saluran</td><td><b>${nilaiWord(seg.qSaluran, 3, " m³/detik")}</b></td></tr>
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+          </table>
+
+          <h3>C. Tata Guna Lahan dan Koefisien Limpasan</h3>
+          ${buatTabelTutupanWord(seg)}
+
+          <h3>D. Perhitungan Debit dan Kontrol Kapasitas</h3>
+          <table class="info-table">
+            <tbody>
+              <tr><td>Rumus Debit Rencana</td><td>Q = 0,00278 x Cgab x I x A</td></tr>
+              <tr><td>C Gabungan</td><td>${nilaiWord(seg.cGabungan, 3, "")}</td></tr>
+              <tr><td>Q Rencana</td><td><b>${nilaiWord(seg.qRencana, 3, " m³/detik")}</b></td></tr>
+              <tr><td>Q Saluran</td><td><b>${nilaiWord(seg.qSaluran, 3, " m³/detik")}</b></td></tr>
+              <tr><td>Status Kontrol</td><td>${statusBadgeWord(seg.status)}</td></tr>
+            </tbody>
+          </table>
+
+          <div class="conclusion-box">
+            <b>Kesimpulan Segmen:</b><br>
+            ${escapeHtml(buatKesimpulanSegmenWord(seg))}
+          </div>
+        </div>
+      `).join("<br style='page-break-before:always'>");
+    }
+
+    function exportKeWord() {
+      saveFormToSegmen();
+      hitungSemuaSegmenUntukExport();
+      renderTutupan();
+      renderHasilMini();
+      renderRekapSegmen();
+      updateSummary();
+      simpanKeLocal(false);
+
+      if (segmenList.length === 0) {
+        alert("Belum ada segmen untuk dijadikan Word.");
+        return;
+      }
+
+      const namaProyek = document.getElementById("namaProyek").value || "Laporan Perhitungan Drainase";
+      const stasiun = namaStasiunLabel(document.getElementById("stasiunR24Default").value);
+      const kalaUlang = document.getElementById("kalaUlangDefault").value;
+      const r24 = document.getElementById("r24Default").value;
+      const tanggal = new Date().toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" });
+      const tahun = new Date().getFullYear();
+
+      const html = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office"
+              xmlns:w="urn:schemas-microsoft-com:office:word"
+              xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+          <meta charset="UTF-8">
+          <title>${escapeHtml(namaProyek)}</title>
+          <style>
+            @page { size: A4 landscape; margin: 1.35cm 1.35cm 1.25cm 1.35cm; }
+            body { font-family: Arial, sans-serif; font-size: 9.5pt; color: #111827; }
+            h1 { font-size: 18pt; margin: 0 0 10px; text-align: center; letter-spacing: .5px; }
+            h2 { color: #0f766e; font-size: 13pt; margin: 14px 0 8px; }
+            h3 { color: #111827; font-size: 10.5pt; margin: 10px 0 6px; }
+            p { line-height: 1.45; margin: 5px 0 8px; }
+            table { border-collapse: collapse; width: 100%; margin: 6px 0 10px; }
+            th, td { border: 1px solid #5b677a; padding: 5px 6px; vertical-align: top; }
+            th { background: #0f766e; color: white; text-align: center; font-weight: bold; }
+            td.num { text-align: right; white-space: nowrap; }
+            .center { text-align: center; }
+            .muted { color: #6b7280; }
+            .cover { height: 560px; border: 3px solid #0f766e; padding: 36px 44px; text-align: center; }
+            .cover-top { font-weight: bold; font-size: 13pt; line-height: 1.6; text-transform: uppercase; }
+            .cover-title { margin-top: 95px; }
+            .cover-title h1 { font-size: 22pt; line-height: 1.25; }
+            .cover-location { margin: 30px auto 0; border-top: 2px solid #0f766e; border-bottom: 2px solid #0f766e; padding: 14px; font-size: 14pt; font-weight: bold; width: 72%; }
+            .cover-footer { margin-top: 120px; font-weight: bold; font-size: 12pt; }
+            .page-break { page-break-before: always; }
+            .doc-header { border-bottom: 3px solid #0f766e; padding-bottom: 8px; margin-bottom: 12px; }
+            .doc-header-title { font-weight: bold; font-size: 14pt; color: #0f766e; }
+            .doc-header-sub { font-size: 9pt; color: #4b5563; margin-top: 2px; }
+            .section-bar { background: #0f766e; color: white; padding: 7px 10px; font-weight: bold; margin: 4px 0 10px; display: flex; justify-content: space-between; align-items: center; }
+            .info-table td:first-child { width: 28%; font-weight: bold; background: #f3f4f6; }
+            .compact td { padding: 4px 5px; }
+            .layout-table, .layout-table td { border: none; margin: 0; padding: 0 8px 0 0; }
+            .layout-table td + td { padding: 0 0 0 8px; }
+            .data-table tr:nth-child(even) td { background: #f8fafc; }
+            .rekap-table th, .rekap-table td { font-size: 8.5pt; }
+            .small-table th, .small-table td { font-size: 9pt; }
+            .total-row td { background: #e7f5ef !important; font-weight: bold; }
+            .summary-table td { width: 25%; background: #f8fafc; border: 1px solid #99b8ad; }
+            .summary-table span { display: block; color: #4b5563; font-size: 8.5pt; margin-bottom: 3px; }
+            .summary-table b { color: #0f766e; font-size: 12pt; }
+            .status { display: inline-block; padding: 3px 8px; border-radius: 10px; font-weight: bold; font-size: 8.5pt; }
+            .status-ok { background: #dcfce7; color: #166534; }
+            .status-no { background: #fee2e2; color: #991b1b; }
+            .status-warn { background: #fef3c7; color: #92400e; }
+            .conclusion-box { border-left: 5px solid #0f766e; background: #f8fafc; padding: 10px 12px; line-height: 1.45; margin-top: 8px; }
+            .sign-table td { border: none; text-align: center; height: 72px; vertical-align: bottom; }
+          </style>
+        </head>
+        <body>
+          <div class="cover">
+            <div class="cover-top">
+              Pemerintah Provinsi DKI Jakarta<br>
+              Suku Dinas Sumber Daya Air<br>
+              Kota Administrasi Jakarta Timur
+            </div>
+            <div class="cover-title">
+              <h1>LAPORAN PERHITUNGAN<br>HIDROLOGI DAN HIDROLIKA DRAINASE</h1>
+            </div>
+            <div class="cover-location">${escapeHtml(namaProyek)}</div>
+            <div class="cover-footer">${tahun}</div>
+          </div>
+
+          <div class="page-break"></div>
+          <div class="doc-header">
+            <div class="doc-header-title">Laporan Perhitungan Hidrologi dan Hidrolika Drainase</div>
+            <div class="doc-header-sub">${escapeHtml(namaProyek)} | Diekspor pada ${escapeHtml(tanggal)}</div>
+          </div>
+
+          <h2>1. Data Umum Pekerjaan</h2>
+          <table class="info-table">
+            <tbody>
+              <tr><td>Nama Lokasi / Pekerjaan</td><td>${escapeHtml(namaProyek)}</td></tr>
+              <tr><td>Stasiun Hujan</td><td>${escapeHtml(stasiun)}</td></tr>
+              <tr><td>Kala Ulang</td><td>${escapeHtml(kalaUlang)} tahun</td></tr>
+              <tr><td>R24</td><td>${escapeHtml(r24)} mm</td></tr>
+              <tr><td>Tanggal Ekspor</td><td>${escapeHtml(tanggal)}</td></tr>
+            </tbody>
+          </table>
+
+          <h2>2. Ringkasan Hasil Kontrol</h2>
+          ${buatRingkasanWord()}
+
+          <h2>3. Rekapitulasi Segmen</h2>
+          ${buatRekapWord()}
+
+          <div class="page-break"></div>
+          <div class="doc-header">
+            <div class="doc-header-title">Detail Perhitungan Segmen</div>
+            <div class="doc-header-sub">${escapeHtml(namaProyek)}</div>
+          </div>
+          ${buatDetailSegmenWord()}
+
+          <div class="page-break"></div>
+          <h2>Penutup</h2>
+          <p>Dokumen ini merupakan hasil perhitungan awal berbasis data yang diinput pada aplikasi WebGIS. Hasil perhitungan dapat digunakan sebagai bahan kerja teknis awal dan tetap perlu diverifikasi kembali terhadap kondisi lapangan, data pengukuran, serta ketentuan teknis yang berlaku.</p>
+
+          <br><br>
+          <table class="sign-table">
+            <tr>
+              <td style="width:50%;">Diperiksa oleh,<br><br><br><br><b>________________________</b></td>
+              <td style="width:50%;">Dibuat oleh,<br><br><br><br><b>________________________</b></td>
+            </tr>
+          </table>
+        </body>
+        </html>
+      `;
+
+      const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = cleanFileName(namaProyek) + '-laporan-drainase.doc';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
     /* SIMPAN LOCAL */
     function simpanKeLocal(showAlert) {
       const dataSimpan = {
@@ -2089,6 +2853,7 @@
     }
 
     document.getElementById("btnSimpanLocal").addEventListener("click", function() { saveFormToSegmen(); simpanKeLocal(true); });
+    document.getElementById("btnExportWord").addEventListener("click", exportKeWord);
     document.getElementById("btnResetSemua").addEventListener("click", function() {
       if (!confirm("Reset semua data segmen dan perhitungan?")) return;
       localStorage.removeItem("webgisDrainaseExcelWorkflowRevisi5");
