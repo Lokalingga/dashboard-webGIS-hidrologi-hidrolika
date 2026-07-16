@@ -1009,7 +1009,7 @@
 
         <div class="btn-row-3">
           <button class="btn btn-secondary" id="btnSimpanLocal" type="button">Simpan Data</button>
-          <button class="btn" id="btnExportWord" type="button">Jadikan Word</button>
+          <button class="btn" id="btnExportWord" type="button">Export Laporan</button>
           <button class="btn btn-danger" id="btnResetSemua" type="button">Reset Semua</button>
         </div>
       </div>
@@ -1019,6 +1019,7 @@
       <input type="text" id="inputCariJalan" placeholder="Cari jalan/lokasi, contoh: Jalan Raya Pondok Gede">
       <button type="button" id="btnCariJalan">Cari</button>
       <button type="button" id="btnLokasiSaya">Lokasi Saya</button>
+      <button type="button" id="btnHapusTitikCari">Hapus Titik</button>
     </div>
 
     <div id="searchResultList"></div>
@@ -1337,6 +1338,10 @@
       });
     }
 
+    function tombolPopupHapusTitik() {
+      return `<br><br><button onclick="hapusTitikPencarian()" style="padding:5px 8px;border:none;border-radius:4px;background:#b91c1c;color:white;font-weight:bold;cursor:pointer;">Hapus Titik</button>`;
+    }
+
     function pilihHasilCariJalan(index) {
       const list = document.getElementById("searchResultList");
       const data = JSON.parse(list.dataset.hasil || "[]");
@@ -1347,9 +1352,32 @@
       if (isNaN(lat) || isNaN(lon)) return;
       if (markerCariJalan) map.removeLayer(markerCariJalan);
       markerCariJalan = L.marker([lat, lon]).addTo(map);
-      markerCariJalan.bindPopup(`<b>Hasil Pencarian</b><br>${item.display_name}`).openPopup();
+      markerCariJalan.bindPopup(`<b>Hasil Pencarian</b><br>${item.display_name}${tombolPopupHapusTitik()}`).openPopup();
       map.setView([lat, lon], 18);
       list.style.display = "none";
+    }
+
+    function hapusTitikPencarian() {
+      if (markerCariJalan) {
+        map.removeLayer(markerCariJalan);
+        markerCariJalan = null;
+      }
+      if (markerLokasiSaya) {
+        map.removeLayer(markerLokasiSaya);
+        markerLokasiSaya = null;
+      }
+      if (circleAkurasiLokasi) {
+        map.removeLayer(circleAkurasiLokasi);
+        circleAkurasiLokasi = null;
+      }
+      const list = document.getElementById("searchResultList");
+      if (list) {
+        list.style.display = "none";
+        list.innerHTML = "";
+        list.dataset.hasil = "[]";
+      }
+      const input = document.getElementById("inputCariJalan");
+      if (input) input.value = "";
     }
 
     function tampilkanLokasiSaya() {
@@ -1362,13 +1390,14 @@
         if (circleAkurasiLokasi) map.removeLayer(circleAkurasiLokasi);
         markerLokasiSaya = L.marker([lat, lon], { icon: ikonLokasiSaya }).addTo(map);
         circleAkurasiLokasi = L.circle([lat, lon], { radius: akurasi, color: "#2563eb", weight: 1, fillColor: "#2563eb", fillOpacity: 0.12 }).addTo(map);
-        markerLokasiSaya.bindPopup(`<b>Lokasi Saya</b><br>Akurasi sekitar ${akurasi.toFixed(0)} meter`).openPopup();
+        markerLokasiSaya.bindPopup(`<b>Lokasi Saya</b><br>Akurasi sekitar ${akurasi.toFixed(0)} meter${tombolPopupHapusTitik()}`).openPopup();
         map.setView([lat, lon], 18);
       }, function () { alert("Lokasi tidak bisa diakses. Pastikan izin lokasi browser sudah aktif."); }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
     }
 
     document.getElementById("btnCariJalan").addEventListener("click", cariJalan);
     document.getElementById("btnLokasiSaya").addEventListener("click", tampilkanLokasiSaya);
+    document.getElementById("btnHapusTitikCari").addEventListener("click", hapusTitikPencarian);
     document.getElementById("inputCariJalan").addEventListener("keydown", function (event) { if (event.key === "Enter") cariJalan(); });
 
     /* DATA SEGMEN */
@@ -1488,7 +1517,10 @@
         statusVisual: null,
         status: "Belum Lengkap",
         caLayerId: null,
-        lineLayerId: null
+        lineLayerId: null,
+        caGeoJSON: null,
+        caFileName: null,
+        lineGeoJSON: null
       };
     }
 
@@ -2375,6 +2407,8 @@
 
         layerGambarUkur.addLayer(layer);
         seg.caLayerId = L.Util.stamp(layer);
+        seg.caGeoJSON = geojson;
+        seg.caFileName = file.name;
         seg.luasCA = luasHa;
         document.getElementById("luasCATotal").value = luasHa.toFixed(4);
 
@@ -2425,6 +2459,8 @@
         layer.options.pane = "paneCA";
         if (layer.setStyle) layer.setStyle({ color: seg.warna, fillColor: seg.warna, fillOpacity: 0.20, weight: 2 });
         const geojson = layer.toGeoJSON();
+        seg.caGeoJSON = geojson;
+        seg.caFileName = "Digambar manual";
         const luasM2 = turf.area(geojson);
         const luasHa = luasM2 / 10000;
         seg.luasCA = luasHa;
@@ -2436,6 +2472,7 @@
         seg.lineLayerId = L.Util.stamp(layer);
         if (layer.setStyle) layer.setStyle({ color: seg.warna, weight: 4, opacity: 0.95 });
         const geojson = layer.toGeoJSON();
+        seg.lineGeoJSON = geojson;
         const panjangKm = turf.length(geojson, { units: "kilometers" });
         const panjangM = panjangKm * 1000;
         seg.panjangL = panjangM;
@@ -2454,12 +2491,38 @@
         const id = L.Util.stamp(layer);
         segmenList.forEach(seg => {
           if (seg.caLayerId === id) {
-            const luasHa = turf.area(layer.toGeoJSON()) / 10000;
+            const geojson = layer.toGeoJSON();
+            const luasHa = turf.area(geojson) / 10000;
             seg.luasCA = luasHa;
+            seg.caGeoJSON = geojson;
+            if (!seg.caFileName) seg.caFileName = "Digambar manual";
           }
           if (seg.lineLayerId === id) {
-            const panjangM = turf.length(layer.toGeoJSON(), { units: "kilometers" }) * 1000;
+            const geojson = layer.toGeoJSON();
+            const panjangM = turf.length(geojson, { units: "kilometers" }) * 1000;
             seg.panjangL = panjangM;
+            seg.lineGeoJSON = geojson;
+          }
+        });
+      });
+      loadSegmenToForm();
+      refreshAll();
+    });
+
+    map.on(L.Draw.Event.DELETED, function (event) {
+      event.layers.eachLayer(function (layer) {
+        const id = L.Util.stamp(layer);
+        segmenList.forEach(seg => {
+          if (seg.caLayerId === id) {
+            seg.caLayerId = null;
+            seg.caGeoJSON = null;
+            seg.caFileName = null;
+            seg.luasCA = null;
+          }
+          if (seg.lineLayerId === id) {
+            seg.lineLayerId = null;
+            seg.lineGeoJSON = null;
+            seg.panjangL = null;
           }
         });
       });
@@ -2477,6 +2540,13 @@
     function hapusLayerSegmen(seg) {
       hapusLayerById(seg.caLayerId);
       hapusLayerById(seg.lineLayerId);
+      if (seg) {
+        seg.caLayerId = null;
+        seg.lineLayerId = null;
+        seg.caGeoJSON = null;
+        seg.caFileName = null;
+        seg.lineGeoJSON = null;
+      }
     }
 
     function updateLayerStyleSegmen(seg) {
@@ -2669,6 +2739,25 @@
       ctx.fillStyle = "#d9d9d9";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+      function ambilGeometriDariGeoJSON(gj) {
+        const geoms = [];
+        function baca(obj) {
+          if (!obj) return;
+          if (obj.type === "FeatureCollection") {
+            (obj.features || []).forEach(f => baca(f));
+          } else if (obj.type === "Feature") {
+            baca(obj.geometry);
+          } else if (obj.type === "GeometryCollection") {
+            (obj.geometries || []).forEach(g => baca(g));
+          } else if (obj.coordinates) {
+            geoms.push(obj);
+          }
+        }
+        baca(gj);
+        return geoms;
+      }
+
+      const gambarData = [];
       const items = [];
       function tambahKoordinat(coords, tipe, seg) {
         if (!coords) return;
@@ -2679,14 +2768,21 @@
         coords.forEach(c => tambahKoordinat(c, tipe, seg));
       }
 
-      segmenList.forEach(seg => {
+      function tambahGambar(geom, tipe, seg, idx) {
+        if (!geom || !geom.coordinates) return;
+        gambarData.push({ geom, tipe, seg, idx });
+        tambahKoordinat(geom.coordinates, tipe, seg);
+      }
+
+      segmenList.forEach((seg, idx) => {
+        const sudahAdaCA = !!seg.caGeoJSON;
+        const sudahAdaLine = !!seg.lineGeoJSON;
+        if (sudahAdaCA) ambilGeometriDariGeoJSON(seg.caGeoJSON).forEach(geom => tambahGambar(geom, "ca", seg, idx));
+        if (sudahAdaLine) ambilGeometriDariGeoJSON(seg.lineGeoJSON).forEach(geom => tambahGambar(geom, "line", seg, idx));
         layerGambarUkur.eachLayer(layer => {
           const id = L.Util.stamp(layer);
-          if (id !== seg.caLayerId && id !== seg.lineLayerId) return;
-          const gj = layer.toGeoJSON();
-          const geom = gj.type === "Feature" ? gj.geometry : gj;
-          if (!geom) return;
-          tambahKoordinat(geom.coordinates, id === seg.caLayerId ? "ca" : "line", seg);
+          if (id === seg.caLayerId && !sudahAdaCA) ambilGeometriDariGeoJSON(layer.toGeoJSON()).forEach(geom => tambahGambar(geom, "ca", seg, idx));
+          if (id === seg.lineLayerId && !sudahAdaLine) ambilGeometriDariGeoJSON(layer.toGeoJSON()).forEach(geom => tambahGambar(geom, "line", seg, idx));
         });
       });
 
@@ -2763,30 +2859,24 @@
       for (let x = 0; x <= canvas.width; x += 45) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
       for (let y = 0; y <= canvas.height; y += 45) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
 
-      segmenList.forEach((seg, idx) => {
-        layerGambarUkur.eachLayer(layer => {
-          const id = L.Util.stamp(layer);
-          if (id !== seg.caLayerId && id !== seg.lineLayerId) return;
-          const gj = layer.toGeoJSON();
-          const geom = gj.type === "Feature" ? gj.geometry : gj;
-          if (!geom) return;
-          const color = idx % 2 === 0 ? "#1d4ed8" : "#dc2626";
-          const fill = idx % 2 === 0 ? "rgba(37,99,235,0.55)" : "rgba(220,38,38,0.55)";
-          if (id === seg.caLayerId) {
-            if (geom.type === "Polygon") geom.coordinates.forEach(ring => gambarRing(ring, fill, color));
-            if (geom.type === "MultiPolygon") geom.coordinates.forEach(poly => poly.forEach(ring => gambarRing(ring, fill, color)));
-          }
-          if (id === seg.lineLayerId) {
-            if (geom.type === "LineString") gambarLine(geom.coordinates, "#ffffff");
-            if (geom.type === "MultiLineString") geom.coordinates.forEach(line => gambarLine(line, "#ffffff"));
-          }
-        });
+      gambarData.forEach(item => {
+        const color = item.idx % 2 === 0 ? "#1d4ed8" : "#dc2626";
+        const fill = item.idx % 2 === 0 ? "rgba(37,99,235,0.55)" : "rgba(220,38,38,0.55)";
+        const geom = item.geom;
+        if (item.tipe === "ca") {
+          if (geom.type === "Polygon") geom.coordinates.forEach(ring => gambarRing(ring, fill, color));
+          if (geom.type === "MultiPolygon") geom.coordinates.forEach(poly => poly.forEach(ring => gambarRing(ring, fill, color)));
+        }
+        if (item.tipe === "line") {
+          if (geom.type === "LineString") gambarLine(geom.coordinates, "#ffffff");
+          if (geom.type === "MultiLineString") geom.coordinates.forEach(line => gambarLine(line, "#ffffff"));
+        }
       });
 
       ctx.fillStyle = "rgba(255,255,255,0.85)";
-      ctx.fillRect(canvas.width - 190, 16, 170, 70);
+      ctx.fillRect(canvas.width - 190, 16, 170, 90);
       ctx.strokeStyle = "#111";
-      ctx.strokeRect(canvas.width - 190, 16, 170, 70);
+      ctx.strokeRect(canvas.width - 190, 16, 170, 90);
       ctx.fillStyle = "#111";
       ctx.font = "bold 14px Times New Roman";
       ctx.textAlign = "left";
@@ -2795,6 +2885,8 @@
       ctx.fillStyle = "#111"; ctx.font = "12px Times New Roman"; ctx.fillText("Catchment Area", canvas.width - 150, 57);
       ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(canvas.width - 174, 70); ctx.lineTo(canvas.width - 156, 70); ctx.stroke();
       ctx.fillStyle = "#111"; ctx.fillText("Arah aliran", canvas.width - 150, 74);
+      const fileCa = segmenList.map(s => s.caFileName).filter(Boolean)[0];
+      if (fileCa) ctx.fillText("File: " + fileCa.substring(0, 18), canvas.width - 174, 94);
 
       return canvas.toDataURL("image/png");
     }
@@ -3000,7 +3092,7 @@
       simpanKeLocal(false);
 
       if (segmenList.length === 0) {
-        alert("Belum ada segmen untuk dijadikan Word.");
+        alert("Belum ada segmen untuk diekspor menjadi laporan.");
         return;
       }
 
@@ -3039,16 +3131,16 @@
             table { border-collapse: collapse; margin-left: auto; margin-right: auto; }
             table caption { caption-side: top; text-align: center; margin-bottom: 2px; }
             .rain-table { width: 7.5cm; margin-top: 8px; }
-            .rain-table th, .rain-table td { border: none; border-bottom: 1px solid #000; padding: 3px 8px; }
+            .rain-table th, .rain-table td { border: none; border-bottom: 1px solid #000; padding: 5px 10px; line-height: 1.35; mso-padding-alt: 5px 10px 5px 10px; }
             .rain-table th { font-weight: normal; }
-            .report-table th, .report-table td { border: 1px solid #000; padding: 3px 5px; vertical-align: middle; }
+            .report-table th, .report-table td { border: 1px solid #000; padding: 5px 7px; vertical-align: middle; line-height: 1.28; mso-padding-alt: 5px 7px 5px 7px; }
             .report-table th { font-weight: bold; text-align: center; }
             .small { font-size: 10pt; }
             .tiny { font-size: 8.5pt; }
-            .coeff-table { width: 12cm; font-size: 10pt; }
-            .debit-table { width: 17.2cm; }
-            .hidro-table { width: 16.2cm; }
-            .control-table { width: 12.6cm; margin-top: 0; }
+            .coeff-table { width: 12.8cm; font-size: 10pt; }
+            .debit-table { width: 17.4cm; }
+            .hidro-table { width: 16.8cm; }
+            .control-table { width: 13.4cm; margin-top: 0; }
           </style>
         </head>
         <body>
@@ -3098,6 +3190,45 @@
       URL.revokeObjectURL(url);
     }
 
+    function tambahLayerCADariData(seg) {
+      if (!seg || !seg.caGeoJSON) return;
+      const layer = L.geoJSON(seg.caGeoJSON, {
+        pane: "paneCA",
+        style: {
+          color: seg.warna || "#dc2626",
+          fillColor: seg.warna || "#dc2626",
+          fillOpacity: 0.22,
+          weight: 2
+        },
+        onEachFeature: function(feature, layerFeature) {
+          const luasText = seg.luasCA ? seg.luasCA.toFixed(4) + " ha" : "-";
+          layerFeature.bindPopup(`<b>Catchment Area</b><br>${seg.nama}<br>File: ${seg.caFileName || "-"}<br>Luas: ${luasText}`);
+        }
+      });
+      layerGambarUkur.addLayer(layer);
+      seg.caLayerId = L.Util.stamp(layer);
+    }
+
+    function tambahLayerLineDariData(seg) {
+      if (!seg || !seg.lineGeoJSON) return;
+      const layer = L.geoJSON(seg.lineGeoJSON, {
+        pane: "paneSegmen",
+        style: { color: seg.warna || "#dc2626", weight: 4, opacity: 0.95 }
+      });
+      layerGambarUkur.addLayer(layer);
+      seg.lineLayerId = L.Util.stamp(layer);
+    }
+
+    function pulihkanLayerDariDataSegmen() {
+      layerGambarUkur.clearLayers();
+      segmenList.forEach(seg => {
+        seg.caLayerId = null;
+        seg.lineLayerId = null;
+        tambahLayerCADariData(seg);
+        tambahLayerLineDariData(seg);
+      });
+    }
+
     /* SIMPAN LOCAL */
     function simpanKeLocal(showAlert) {
       const dataSimpan = {
@@ -3123,7 +3254,7 @@
         document.getElementById("kalaUlangDefault").value = data.kalaUlangDefault || "5";
         segmenList = data.segmenList || [];
         activeSegmentId = data.activeSegmentId || (segmenList[0] ? segmenList[0].id : null);
-        // Layer gambar tidak disimpan agar file tetap ringan. Luas dan panjang tetap tersimpan.
+        pulihkanLayerDariDataSegmen();
         return segmenList.length > 0;
       } catch (e) {
         return false;
@@ -3158,6 +3289,7 @@
       updateR24DefaultDariKalaUlang(true);
     });
 
+    window.hapusTitikPencarian = hapusTitikPencarian;
     window.hapusTutupan = hapusTutupan;
     window.pilihHasilCariJalan = pilihHasilCariJalan;
     window.tutupPanelUkur = tutupPanelUkur;
